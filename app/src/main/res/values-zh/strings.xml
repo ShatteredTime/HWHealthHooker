@@ -11,4 +11,14 @@
     <string name="hook_message_center_subtitle">不再推送卡卡消息</string>
     <string name="hook_personal_center_title">个人页净化</string>
     <string name="hook_personal_center_subtitle">去除卡卡领取提醒</string>
+    <string name="debug_settings_title">调试设置</string>
+    <string name="debug_red_dot_title">个人页红点调试</string>
+    <string name="debug_red_dot_subtitle">输出个人页红点消息源</string>
+    <string name="debug_confirm_title">注意</string>
+    <string name="debug_confirm_message">仅在需要的时候打开调试功能!</string>
+    <string name="debug_confirm_cancel">取消</string>
+    <string name="debug_confirm_ok">确认 (%1$d)</string>
+    <string name="debug_confirm_ok_ready">确认</string>
+    <string name="debug_hide_icon_title">隐藏应用图标</string>
+    <string name="debug_hide_icon_subtitle">隐藏桌面图标，可在Xposed管理器中找到</string>
 </resources>

@@ -19,10 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -77,19 +73,13 @@ fun SwitchGroup(
 
 @Composable
 private fun SettingsSwitchRow(item: SwitchItem) {
-    var currentChecked by remember { mutableStateOf(item.isChecked) }
-    val onToggle: (Boolean) -> Unit = { newValue ->
-        currentChecked = newValue
-        item.onCheckedChange(newValue)
-    }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = Dimensions.ListItem.M)
             .toggleable(
-                value = currentChecked,
-                onValueChange = onToggle,
+                value = item.isChecked,
+                onValueChange = { item.onCheckedChange(it) },
                 role = Role.Switch
             )
             .padding(Dimensions.SpaceXL),
@@ -137,8 +127,8 @@ private fun SettingsSwitchRow(item: SwitchItem) {
 
         // Right switch
         Switch(
-            checked = currentChecked,
-            onCheckedChange = onToggle
+            checked = item.isChecked,
+            onCheckedChange = { item.onCheckedChange(it) }
         )
     }
 }

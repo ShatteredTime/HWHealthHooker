@@ -14,8 +14,8 @@ android {
         applicationId = "moe.evil.hwhh"
         minSdk = 36
         targetSdk = 36
-        versionCode = 1
-        versionName = "1"
+        versionCode = 2
+        versionName = "2"
         ndk {
             abiFilters += "arm64-v8a"
         }

@@ -11,4 +11,14 @@
     <string name="hook_message_center_subtitle">Stop pushing KaKa messages</string>
     <string name="hook_personal_center_title">Profile Cleanup</string>
     <string name="hook_personal_center_subtitle">Remove KaKa reward reminders</string>
+    <string name="debug_settings_title">Debug Settings</string>
+    <string name="debug_red_dot_title">Profile Red Dot Debug</string>
+    <string name="debug_red_dot_subtitle">Output profile red dot message source</string>
+    <string name="debug_confirm_title">Warning</string>
+    <string name="debug_confirm_message">Only enable debug features when needed!</string>
+    <string name="debug_confirm_cancel">Cancel</string>
+    <string name="debug_confirm_ok">Confirm (%1$d)</string>
+    <string name="debug_confirm_ok_ready">Confirm</string>
+    <string name="debug_hide_icon_title">Hide App Icon</string>
+    <string name="debug_hide_icon_subtitle">Hide desktop icon, find in Xposed Manager</string>
 </resources>

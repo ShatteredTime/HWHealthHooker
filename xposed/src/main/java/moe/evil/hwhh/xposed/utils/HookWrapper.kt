@@ -5,53 +5,42 @@ import android.view.ViewGroup
 import com.highcapable.kavaref.KavaRef.Companion.resolve
 import com.highcapable.kavaref.condition.MethodCondition
 import com.highcapable.kavaref.extension.toClassOrNull
-import com.highcapable.kavaref.resolver.base.MemberResolver
 import com.highcapable.kavaref.resolver.MethodResolver
+import com.highcapable.kavaref.resolver.base.MemberResolver
 import com.highcapable.yukihookapi.hook.core.YukiMemberHookCreator
 import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
 import com.highcapable.yukihookapi.hook.log.YLog
 import com.highcapable.yukihookapi.hook.param.HookParam
 import com.highcapable.yukihookapi.hook.param.PackageParam
+import com.highcapable.yukihookapi.hook.xposed.prefs.data.PrefsData
+import moe.evil.hwhh.xposed.PREFS_NAME
+import org.luckypray.dexkit.DexKitBridge
 import kotlin.reflect.KClass
-
-fun Any?.safeToString(): String = runCatching { this?.toString() }.getOrNull() ?: "null"
-
-fun Throwable.shortMsg(): String =
-    (message?.takeIf { it.isNotBlank() } ?: this::class.java.name)
 
 context(h: YukiBaseHooker)
 fun String.toClassOrLog(): Class<*>? =
     this.toClassOrNull(loader = h.appClassLoader)
         .also { if (it == null) YLog.warn("class NOT found: $this") }
 
-inline fun tryHook(tag: String, block: () -> Unit) {
-    runCatching(block).onFailure { e ->
-        YLog.error("[TryHook] <$tag> on failure! e: ${e.shortMsg()}")
-    }
-}
-
-inline fun DexKitHooker.tryHook(block: () -> Unit) {
+inline fun DexKitHooker.tryHookWithDexKit(block: (DexKitBridge) -> Unit) {
     val tag = this::class.simpleName ?: "Unknown"
-    runCatching(block).onFailure { e ->
-        YLog.error("[TryHook] <$tag> on failure! e: ${e.shortMsg()}")
+    runCatching { block(requireBridge()) }.onFailure { e ->
+        YLog.error("[TryHook] <$tag> on failure!", e)
     }
 }
 
-inline fun safeCall(tag: String, block: () -> Unit) {
-    runCatching(block).onFailure { e ->
-        YLog.error("[SafeCall] An Error occurred in $tag", e = e)
-    }
+inline fun YukiBaseHooker.ifDebugPref(pref: PrefsData<Boolean>, block: () -> Unit) {
+    if (runCatching { prefs(PREFS_NAME).get(pref) }.getOrDefault(false)) block()
 }
 
 inline fun HookParam.safeCall(tag: String, block: () -> Unit) {
     val hookTag = "${member.declaringClass.simpleName}#${member.name}"
     runCatching(block).onFailure { e ->
-        YLog.error("[SafeCall] An Error occurred in $tag Hook: <$hookTag>", e = e)
+        YLog.error("[SafeCall] An Error occurred in $tag Hook: <$hookTag>", e)
     }
 }
 
 class SafeHookCreator(private val delegate: YukiMemberHookCreator.MemberHookCreator) {
-
     fun before(initiate: HookParam.() -> Unit) {
         delegate.before { safeCall("before") { initiate() } }
     }
@@ -64,7 +53,7 @@ class SafeHookCreator(private val delegate: YukiMemberHookCreator.MemberHookCrea
         delegate.replaceAny {
             val tag = "${member.declaringClass.simpleName}#${member.name}"
             runCatching { initiate() }.onFailure { e ->
-                YLog.error("Error in replaceAny Hook: <$tag>", e = e)
+                YLog.error("Error in replaceAny Hook: <$tag>", e)
             }.getOrNull()
         }
     }
@@ -95,7 +84,8 @@ inline fun <T : Any> Class<T>.firstMethodOrNullLogged(
 
 fun MethodCondition<*>.toReadableDesc(): String {
     val n = (readGetter("name") as? String)?.takeIf { it.isNotBlank() } ?: "<any>"
-    val paramsObj = readGetter("parameters") ?: readGetter("parameterTypes") ?: readGetter("paramTypes")
+    val paramsObj =
+        readGetter("parameters") ?: readGetter("parameterTypes") ?: readGetter("paramTypes")
     val paramCount = (readGetter("parameterCount") as? Int)
     val params = formatParams(paramsObj, paramCount)
     val ret = formatType(readGetter("returnType"))
@@ -138,7 +128,8 @@ private fun Any.readGetter(prop: String): Any? {
     val suffix = prop.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
     val candidates = arrayOf("get$suffix", prop)
     for (mn in candidates) {
-        val m = this.javaClass.methods.firstOrNull { it.name == mn && it.parameterTypes.isEmpty() } ?: continue
+        val m = this.javaClass.methods.firstOrNull { it.name == mn && it.parameterTypes.isEmpty() }
+            ?: continue
         return runCatching { m.invoke(this) }.getOrNull()
     }
     return null

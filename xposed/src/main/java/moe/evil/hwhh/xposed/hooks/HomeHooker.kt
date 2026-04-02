@@ -9,35 +9,62 @@ import moe.evil.hwhh.xposed.utils.collapseView
 import moe.evil.hwhh.xposed.utils.firstMethodOrNullLogged
 import moe.evil.hwhh.xposed.utils.safeHook
 import moe.evil.hwhh.xposed.utils.toClassOrLog
-import moe.evil.hwhh.xposed.utils.tryHook
+import moe.evil.hwhh.xposed.utils.tryHookWithDexKit
 
 object HomeHooker : DexKitHooker() {
 
-    override fun onHook() = tryHook {
+    override fun onHook() = tryHookWithDexKit { bridge ->
         // bottom recommend card classes
         val operationCardDataClazz = context(this@HomeHooker) {
             "com.huawei.ui.homehealth.operationcard.OperationCardData".toClassOrLog()
-        } ?: return@tryHook
+        } ?: return@tryHookWithDexKit
         val operationCardViewHolderClazz = context(this@HomeHooker) {
             "com.huawei.ui.homehealth.operationcard.OperationCardViewHolder".toClassOrLog()
-        } ?: return@tryHook
+        } ?: return@tryHookWithDexKit
         // function menu card classes
         val functionMenuCardDataClazz = context(this@HomeHooker) {
             "com.huawei.ui.homehealth.FunctionMenuCardData".toClassOrLog()
-        } ?: return@tryHook
+        } ?: return@tryHookWithDexKit
         val functionMenuViewHolderClazz = context(this@HomeHooker) {
-            "com.huawei.ui.homehealth.FunctionMenuCardData\$FunctionMenuViewHolder".toClassOrLog()
-        } ?: return@tryHook
+            $$"com.huawei.ui.homehealth.FunctionMenuCardData$FunctionMenuViewHolder".toClassOrLog()
+        } ?: return@tryHookWithDexKit
         // daily moment card classes
         val dailyMomentCardAdapterClazz = context(this@HomeHooker) {
             "com.huawei.health.functionsetcard.dailymoment.DailyMomentCardAdapter".toClassOrLog()
-        } ?: return@tryHook
+        } ?: return@tryHookWithDexKit
         val functionSetViewAdapterClazz = context(this@HomeHooker) {
             "com.huawei.health.functionsetcard.FunctionSetViewAdapter".toClassOrLog()
-        } ?: return@tryHook
+        } ?: return@tryHookWithDexKit
         val recyclerViewHolderClazz = context(this@HomeHooker) {
-            "androidx.recyclerview.widget.RecyclerView\$ViewHolder".toClassOrLog()
-        } ?: return@tryHook
+            $$"androidx.recyclerview.widget.RecyclerView$ViewHolder".toClassOrLog()
+        } ?: return@tryHookWithDexKit
+
+        val ocvhVisibilityName = bridge.findMethod {
+            searchPackages("com.huawei.ui.homehealth.operationcard")
+            matcher {
+                declaredClass = "com.huawei.ui.homehealth.operationcard.OperationCardViewHolder"
+                paramTypes("int")
+                returnType = "void"
+            }
+        }.single().name
+
+        val fmvhVisibilityName = bridge.findMethod {
+            searchPackages("com.huawei.ui.homehealth")
+            matcher {
+                declaredClass =
+                    $$"com.huawei.ui.homehealth.FunctionMenuCardData$FunctionMenuViewHolder"
+                paramTypes("int")
+                returnType = "void"
+            }
+        }.single().name
+
+        val dmcaCreateHolderName = bridge.findMethod {
+            searchPackages("com.huawei.health.functionsetcard.dailymoment")
+            matcher {
+                declaredClass = "com.huawei.health.functionsetcard.dailymoment.DailyMomentCardAdapter"
+                paramTypes("android.view.ViewGroup")
+            }
+        }.single().name
 
         // very bottom ads
         operationCardDataClazz.firstMethodOrNullLogged {
@@ -49,8 +76,9 @@ object HomeHooker : DexKitHooker() {
             }
         }
 
+        // bottom recommend card visibility setter (dexkit-resolved)
         operationCardViewHolderClazz.firstMethodOrNullLogged {
-            name = "d"
+            name = ocvhVisibilityName
             parameters(Int::class.javaPrimitiveType ?: Int::class.javaObjectType)
         }?.safeHook {
             before {
@@ -71,8 +99,9 @@ object HomeHooker : DexKitHooker() {
             }
         }
 
+        // function menu card visibility setter (dexkit-resolved)
         functionMenuViewHolderClazz.firstMethodOrNullLogged {
-            name = "b"
+            name = fmvhVisibilityName
             parameters(Int::class.javaPrimitiveType ?: Int::class.javaObjectType)
         }?.safeHook {
             before {
@@ -83,9 +112,9 @@ object HomeHooker : DexKitHooker() {
             }
         }
 
-        // ads in health data
+        // ads in health data — daily moment card create holder (dexkit-resolved)
         dailyMomentCardAdapterClazz.firstMethodOrNullLogged {
-            name = "Zf_"
+            name = dmcaCreateHolderName
             parameters(ViewGroup::class)
         }?.safeHook {
             after {
@@ -110,10 +139,7 @@ object HomeHooker : DexKitHooker() {
 
     private fun collapseDailyMomentCard(holder: Any?) {
         val itemView = extractItemView(holder)
-        val dailyMomentCardId = runCatching {
-            itemView.resources.getIdentifier("daily_moment_health_card", "id", HOOK_TARGET_PACKAGE)
-        }.getOrDefault(0)
-        // TODO: do we need raise error if not found?
+        val dailyMomentCardId = itemView.resources.getIdentifier("daily_moment_health_card", "id", HOOK_TARGET_PACKAGE)
         if (dailyMomentCardId != 0) {
             itemView.findViewById<View>(dailyMomentCardId)?.let { collapseView(it) }
         }

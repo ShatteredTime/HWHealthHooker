@@ -14,7 +14,7 @@ import moe.evil.hwhh.xposed.utils.DexKitWrapper
     entryClassName = "peanbao"
 )
 class HookEntry : IYukiHookXposedInit {
-    private val tmbDexKit = DexKitWrapper()
+    private val dexkit = DexKitWrapper()
 
     override fun onInit() = configs {
         debugLog {
@@ -23,9 +23,8 @@ class HookEntry : IYukiHookXposedInit {
     }
 
     override fun onHook() = encase {
-        tmbDexKit.loadApp(HOOK_TARGET_PACKAGE) { tds ->
-            if (processName != mainProcessName) return@loadApp
-            tds.loadHooker(
+        dexkit.loadApp(HOOK_TARGET_PACKAGE, true) { ds ->
+            ds.loadHooker(
                 HomeHooker,
                 MessageCenterHooker,
                 PersonalCenterHooker,

@@ -4,7 +4,7 @@ import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.firstMethodOrNullLogged
 import moe.evil.hwhh.xposed.utils.safeHook
 import moe.evil.hwhh.xposed.utils.toClassOrLog
-import moe.evil.hwhh.xposed.utils.tryHook
+import moe.evil.hwhh.xposed.utils.tryHookWithDexKit
 import java.util.concurrent.CountDownLatch
 
 object MessageCenterHooker : DexKitHooker() {
@@ -12,21 +12,59 @@ object MessageCenterHooker : DexKitHooker() {
     private const val KAKA_MESSAGE_ID = "kakaMessage"
     private val KAKA_TYPES = setOf("unclaimedKaka", "kakaExpiration")
 
-    override fun onHook() = tryHook {
+    override fun onHook() = tryHookWithDexKit { bridge ->
         val messageCenterActivityClazz = context(this@MessageCenterHooker) {
             "com.huawei.pluginmessagecenter.activity.MessageCenterActivity".toClassOrLog()
-        } ?: return@tryHook
+        } ?: return@tryHookWithDexKit
         val messageCenterListAdapterClazz = context(this@MessageCenterHooker) {
             "com.huawei.pluginmessagecenter.adapter.MessageCenterListAdapter".toClassOrLog()
-        } ?: return@tryHook
+        } ?: return@tryHookWithDexKit
 
+        val buildKakaMethodName = bridge.findMethod {
+            searchPackages("com.huawei.pluginmessagecenter.activity")
+            matcher {
+                declaredClass = "com.huawei.pluginmessagecenter.activity.MessageCenterActivity"
+                usingStrings = listOf("kakaMessage", "unclaimedKaka")
+            }
+        }.single().name
+
+        val getMessageListMethodName = bridge.findMethod {
+            searchPackages("com.huawei.pluginmessagecenter.activity")
+            matcher {
+                declaredClass = "com.huawei.pluginmessagecenter.activity.MessageCenterActivity"
+                paramTypes("int", "java.util.concurrent.CountDownLatch")
+                usingStrings = listOf("handleMessageCenter reached")
+            }
+        }.single().name
+
+        val setListMethodName = bridge.findMethod {
+            searchPackages("com.huawei.pluginmessagecenter.adapter")
+            matcher {
+                declaredClass = "com.huawei.pluginmessagecenter.adapter.MessageCenterListAdapter"
+                paramTypes("java.util.List")
+                returnType = "void"
+            }
+        }.single().name
+
+        val kakaFlagFieldName = bridge.findField {
+            searchPackages("com.huawei.pluginmessagecenter.activity")
+            matcher {
+                declaredClass = "com.huawei.pluginmessagecenter.activity.MessageCenterActivity"
+                type = "boolean"
+                addWriteMethod {
+                    usingStrings = listOf("kakaMessage", "unclaimedKaka")
+                }
+            }
+        }.single().name
+
+        // suppress kaka message object creation (dexkit-resolved)
         messageCenterActivityClazz.firstMethodOrNullLogged {
-            name = "e"
+            name = buildKakaMethodName
         }?.safeHook {
             replaceAny {
                 instanceOrNull?.let { host ->
                     runCatching {
-                        host.javaClass.getDeclaredField("f")
+                        host.javaClass.getDeclaredField(kakaFlagFieldName)
                             .apply { isAccessible = true }.setBoolean(host, false)
                     }
                 }
@@ -34,8 +72,9 @@ object MessageCenterHooker : DexKitHooker() {
             }
         }
 
+        // filter kaka messages from the assembled list (dexkit-resolved)
         messageCenterActivityClazz.firstMethodOrNullLogged {
-            name = "b"
+            name = getMessageListMethodName
             parameters(Int::class, CountDownLatch::class)
         }?.safeHook {
             after {
@@ -43,8 +82,9 @@ object MessageCenterHooker : DexKitHooker() {
             }
         }
 
+        // filter kaka messages before adapter display (dexkit-resolved)
         messageCenterListAdapterClazz.firstMethodOrNullLogged {
-            name = "a"
+            name = setListMethodName
             parameters(List::class)
         }?.safeHook {
             before {
@@ -67,6 +107,6 @@ object MessageCenterHooker : DexKitHooker() {
     }
 
     private fun callStringGetter(any: Any, methodName: String): String? =
-        runCatching { any.javaClass.getMethod(methodName).invoke(any) as? String }.getOrNull()
+        any.javaClass.getMethod(methodName).invoke(any) as? String
 
 }
