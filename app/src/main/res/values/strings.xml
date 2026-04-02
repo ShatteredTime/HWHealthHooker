@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">HWHealthHooker</string>
+    <string name="module_active_title">Module Activated</string>
+    <string name="module_active_subtitle">HWHealthHooker module is working normally</string>
+    <string name="module_inactive_title">Module Not Activated</string>
+    <string name="module_inactive_subtitle">Please activate the module in Xposed Manager</string>
+    <string name="hook_settings_title">Hook Settings</string>
+    <string name="hook_home_title">Home Cleanup</string>
+    <string name="hook_home_subtitle">Remove ad recommendations</string>
+    <string name="hook_message_center_title">Message Center Cleanup</string>
+    <string name="hook_message_center_subtitle">Stop pushing KaKa messages</string>
+    <string name="hook_personal_center_title">Profile Cleanup</string>
+    <string name="hook_personal_center_subtitle">Remove KaKa reward reminders</string>
+</resources>

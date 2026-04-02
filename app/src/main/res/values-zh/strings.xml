@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">HWHealthHooker</string>
+    <string name="module_active_title">模块已激活</string>
+    <string name="module_active_subtitle">HWHealthHooker 模块正常工作中</string>
+    <string name="module_inactive_title">模块未激活</string>
+    <string name="module_inactive_subtitle">请在 Xposed 管理器中激活模块</string>
+    <string name="hook_settings_title">Hook 设置</string>
+    <string name="hook_home_title">首页净化</string>
+    <string name="hook_home_subtitle">去除广告推荐</string>
+    <string name="hook_message_center_title">消息中心净化</string>
+    <string name="hook_message_center_subtitle">不再推送卡卡消息</string>
+    <string name="hook_personal_center_title">个人页净化</string>
+    <string name="hook_personal_center_subtitle">去除卡卡领取提醒</string>
+</resources>
