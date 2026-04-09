@@ -14,8 +14,8 @@ android {
         applicationId = "moe.evil.hwhh"
         minSdk = 36
         targetSdk = 36
-        versionCode = 2
-        versionName = "2"
+        versionCode = 3
+        versionName = "3"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -33,13 +33,13 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     kotlin {
         compileOptions {
-            jvmToolchain(17)
+            jvmToolchain(21)
         }
     }
 
