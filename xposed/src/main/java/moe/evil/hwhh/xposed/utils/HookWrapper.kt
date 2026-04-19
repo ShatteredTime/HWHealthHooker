@@ -1,7 +1,9 @@
 package moe.evil.hwhh.xposed.utils
 
+import android.app.Activity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import com.highcapable.kavaref.KavaRef.Companion.resolve
 import com.highcapable.kavaref.condition.MethodCondition
 import com.highcapable.kavaref.extension.toClassOrNull
@@ -9,7 +11,6 @@ import com.highcapable.kavaref.resolver.MethodResolver
 import com.highcapable.kavaref.resolver.base.MemberResolver
 import com.highcapable.yukihookapi.hook.core.YukiMemberHookCreator
 import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
-import com.highcapable.yukihookapi.hook.log.YLog
 import com.highcapable.yukihookapi.hook.param.HookParam
 import com.highcapable.yukihookapi.hook.param.PackageParam
 import com.highcapable.yukihookapi.hook.xposed.prefs.data.PrefsData
@@ -17,15 +18,18 @@ import moe.evil.hwhh.xposed.PREFS_NAME
 import org.luckypray.dexkit.DexKitBridge
 import kotlin.reflect.KClass
 
+@PublishedApi
+internal val log = HLog("HookWrapper")
+
 context(h: YukiBaseHooker)
 fun String.toClassOrLog(): Class<*>? =
     this.toClassOrNull(loader = h.appClassLoader)
-        .also { if (it == null) YLog.warn("class NOT found: $this") }
+        .also { if (it == null) log.warn { "class NOT found: $this" } }
 
 inline fun DexKitHooker.tryHookWithDexKit(block: (DexKitBridge) -> Unit) {
     val tag = this::class.simpleName ?: "Unknown"
     runCatching { block(requireBridge()) }.onFailure { e ->
-        YLog.error("[TryHook] <$tag> on failure!", e)
+        log.error(e, tag = "TryHook") { "<$tag> on failure!" }
     }
 }
 
@@ -36,7 +40,7 @@ inline fun YukiBaseHooker.ifDebugPref(pref: PrefsData<Boolean>, block: () -> Uni
 inline fun HookParam.safeCall(tag: String, block: () -> Unit) {
     val hookTag = "${member.declaringClass.simpleName}#${member.name}"
     runCatching(block).onFailure { e ->
-        YLog.error("[SafeCall] An Error occurred in $tag Hook: <$hookTag>", e)
+        log.error(e, tag = "SafeCall") { "An Error occurred in $tag Hook: <$hookTag>" }
     }
 }
 
@@ -53,7 +57,7 @@ class SafeHookCreator(private val delegate: YukiMemberHookCreator.MemberHookCrea
         delegate.replaceAny {
             val tag = "${member.declaringClass.simpleName}#${member.name}"
             runCatching { initiate() }.onFailure { e ->
-                YLog.error("Error in replaceAny Hook: <$tag>", e)
+                log.error(e, tag = "SafeCall") { "Error in replaceAny Hook: <$tag>" }
             }.getOrNull()
         }
     }
@@ -77,7 +81,7 @@ inline fun <T : Any> Class<T>.firstMethodOrNullLogged(
     val r = scope.firstMethodOrNull(condition)
     if (r == null) {
         val c = scope.method().apply(condition)
-        YLog.warn("[KavaRef] method NOT found in ${this.name}: ${c.toReadableDesc()}")
+        log.warn(tag = "KavaRef") { "method NOT found in ${this.name}: ${c.toReadableDesc()}" }
     }
     return r
 }
@@ -124,6 +128,8 @@ fun collapseView(view: View) {
     view.layoutParams = layoutParams
 }
 
+fun Int.asResIdOrNull(): Int? = takeIf { it != 0 }
+
 private fun Any.readGetter(prop: String): Any? {
     val suffix = prop.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
     val candidates = arrayOf("get$suffix", prop)
@@ -133,4 +139,8 @@ private fun Any.readGetter(prop: String): Any? {
         return runCatching { m.invoke(this) }.getOrNull()
     }
     return null
+}
+
+fun Activity.toast(msg: String) {
+    runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
 }

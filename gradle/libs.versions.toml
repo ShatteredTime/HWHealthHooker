@@ -10,7 +10,9 @@ rovo89-xposed-api = "82"
 yukihookapi = "1.3.1"
 kavaref-core = "1.0.2"
 kavaref-extension = "1.0.2"
-dexkit = "2.0.7"
+dexkit = "2.2.0"
+garmin-fit = "21.200.0"
+kotlinx-serialization-json = "1.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +31,8 @@ yukihookapi-ksp-xposed = { group = "com.highcapable.yukihookapi", name = "ksp-xp
 kavaref-core = { group = "com.highcapable.kavaref", name = "kavaref-core", version.ref = "kavaref-core" }
 kavaref-extension = { group = "com.highcapable.kavaref", name = "kavaref-extension", version.ref = "kavaref-extension" }
 dexkit = { group = "org.luckypray", name = "dexkit", version.ref = "dexkit" }
+garmin-fit = { group = "com.garmin", name = "fit", version.ref = "garmin-fit" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -36,3 +40,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

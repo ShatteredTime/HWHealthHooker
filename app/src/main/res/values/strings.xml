@@ -11,6 +11,10 @@
     <string name="hook_message_center_subtitle">Stop pushing KaKa messages</string>
     <string name="hook_personal_center_title">Profile Cleanup</string>
     <string name="hook_personal_center_subtitle">Remove KaKa reward reminders</string>
+    <string name="hook_sport_data_export_title">Workout Export</string>
+    <string name="hook_sport_data_export_subtitle">Export current workout as FIT/JSON</string>
+    <string name="hook_sport_history_export_title">Workout History Export</string>
+    <string name="hook_sport_history_export_subtitle">Batch export outdoor running</string>
     <string name="debug_settings_title">Debug Settings</string>
     <string name="debug_red_dot_title">Profile Red Dot Debug</string>
     <string name="debug_red_dot_subtitle">Output profile red dot message source</string>
@@ -21,4 +25,8 @@
     <string name="debug_confirm_ok_ready">Confirm</string>
     <string name="debug_hide_icon_title">Hide App Icon</string>
     <string name="debug_hide_icon_subtitle">Hide desktop icon, find in Xposed Manager</string>
+    <string name="debug_log_level_title">Log Level</string>
+    <string name="debug_log_level_subtitle">Minimum level emitted to logcat (applied on next target restart)</string>
+    <string name="debug_verbose_export_title">Verbose Export</string>
+    <string name="debug_verbose_export_subtitle">Emit inspect JSON alongside .fit</string>
 </resources>

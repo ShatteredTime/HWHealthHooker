@@ -1,5 +1,7 @@
 package moe.evil.hwhh.xposed.hooks
 
+import com.highcapable.kavaref.KavaRef.Companion.asResolver
+import com.huawei.health.messagecenter.model.MessageObject
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.firstMethodOrNullLogged
 import moe.evil.hwhh.xposed.utils.safeHook
@@ -19,11 +21,13 @@ object MessageCenterHooker : DexKitHooker() {
         val messageCenterListAdapterClazz = context(this@MessageCenterHooker) {
             "com.huawei.pluginmessagecenter.adapter.MessageCenterListAdapter".toClassOrLog()
         } ?: return@tryHookWithDexKit
+        val mcaClassName = messageCenterActivityClazz.name
+        val mclaClassName = messageCenterListAdapterClazz.name
 
         val buildKakaMethodName = bridge.findMethod {
             searchPackages("com.huawei.pluginmessagecenter.activity")
             matcher {
-                declaredClass = "com.huawei.pluginmessagecenter.activity.MessageCenterActivity"
+                declaredClass = mcaClassName
                 usingStrings = listOf("kakaMessage", "unclaimedKaka")
             }
         }.single().name
@@ -31,7 +35,7 @@ object MessageCenterHooker : DexKitHooker() {
         val getMessageListMethodName = bridge.findMethod {
             searchPackages("com.huawei.pluginmessagecenter.activity")
             matcher {
-                declaredClass = "com.huawei.pluginmessagecenter.activity.MessageCenterActivity"
+                declaredClass = mcaClassName
                 paramTypes("int", "java.util.concurrent.CountDownLatch")
                 usingStrings = listOf("handleMessageCenter reached")
             }
@@ -40,7 +44,7 @@ object MessageCenterHooker : DexKitHooker() {
         val setListMethodName = bridge.findMethod {
             searchPackages("com.huawei.pluginmessagecenter.adapter")
             matcher {
-                declaredClass = "com.huawei.pluginmessagecenter.adapter.MessageCenterListAdapter"
+                declaredClass = mclaClassName
                 paramTypes("java.util.List")
                 returnType = "void"
             }
@@ -49,7 +53,7 @@ object MessageCenterHooker : DexKitHooker() {
         val kakaFlagFieldName = bridge.findField {
             searchPackages("com.huawei.pluginmessagecenter.activity")
             matcher {
-                declaredClass = "com.huawei.pluginmessagecenter.activity.MessageCenterActivity"
+                declaredClass = mcaClassName
                 type = "boolean"
                 addWriteMethod {
                     usingStrings = listOf("kakaMessage", "unclaimedKaka")
@@ -62,12 +66,10 @@ object MessageCenterHooker : DexKitHooker() {
             name = buildKakaMethodName
         }?.safeHook {
             replaceAny {
-                instanceOrNull?.let { host ->
-                    runCatching {
-                        host.javaClass.getDeclaredField(kakaFlagFieldName)
-                            .apply { isAccessible = true }.setBoolean(host, false)
-                    }
-                }
+                instanceOrNull?.asResolver()?.optional(silent = true)?.firstFieldOrNull {
+                    name = kakaFlagFieldName
+                    type = Boolean::class
+                }?.setQuietly(false)
                 null
             }
         }
@@ -95,18 +97,9 @@ object MessageCenterHooker : DexKitHooker() {
 
     private fun filterKakaMessages(any: Any?): MutableList<Any?> {
         val source = any as? List<*> ?: return mutableListOf()
-        return source.filterNot { isKakaMessage(it) }.toMutableList()
+        return source.filterNotTo(mutableListOf()) { it is MessageObject && it.isKaka() }
     }
 
-    private fun isKakaMessage(any: Any?): Boolean {
-        if (any == null) return false
-        val msgId = callStringGetter(any, "getMsgId")
-        val module = callStringGetter(any, "getModule")
-        val type = callStringGetter(any, "getType")
-        return msgId == KAKA_MESSAGE_ID || module == KAKA_MODULE || type in KAKA_TYPES
-    }
-
-    private fun callStringGetter(any: Any, methodName: String): String? =
-        any.javaClass.getMethod(methodName).invoke(any) as? String
-
+    private fun MessageObject.isKaka(): Boolean =
+        msgId == KAKA_MESSAGE_ID || module == KAKA_MODULE || type in KAKA_TYPES
 }

@@ -3,6 +3,7 @@ package moe.evil.hwhh.xposed.hooks
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import com.highcapable.kavaref.KavaRef.Companion.asResolver
 import moe.evil.hwhh.xposed.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.collapseView
@@ -42,7 +43,7 @@ object HomeHooker : DexKitHooker() {
         val ocvhVisibilityName = bridge.findMethod {
             searchPackages("com.huawei.ui.homehealth.operationcard")
             matcher {
-                declaredClass = "com.huawei.ui.homehealth.operationcard.OperationCardViewHolder"
+                declaredClass = operationCardViewHolderClazz.name
                 paramTypes("int")
                 returnType = "void"
             }
@@ -51,8 +52,7 @@ object HomeHooker : DexKitHooker() {
         val fmvhVisibilityName = bridge.findMethod {
             searchPackages("com.huawei.ui.homehealth")
             matcher {
-                declaredClass =
-                    $$"com.huawei.ui.homehealth.FunctionMenuCardData$FunctionMenuViewHolder"
+                declaredClass = functionMenuViewHolderClazz.name
                 paramTypes("int")
                 returnType = "void"
             }
@@ -61,7 +61,7 @@ object HomeHooker : DexKitHooker() {
         val dmcaCreateHolderName = bridge.findMethod {
             searchPackages("com.huawei.health.functionsetcard.dailymoment")
             matcher {
-                declaredClass = "com.huawei.health.functionsetcard.dailymoment.DailyMomentCardAdapter"
+                declaredClass = dailyMomentCardAdapterClazz.name
                 paramTypes("android.view.ViewGroup")
             }
         }.single().name
@@ -79,7 +79,7 @@ object HomeHooker : DexKitHooker() {
         // bottom recommend card visibility setter (dexkit-resolved)
         operationCardViewHolderClazz.firstMethodOrNullLogged {
             name = ocvhVisibilityName
-            parameters(Int::class.javaPrimitiveType ?: Int::class.javaObjectType)
+            parameters(Int::class)
         }?.safeHook {
             before {
                 args(0).set(View.GONE)
@@ -102,7 +102,7 @@ object HomeHooker : DexKitHooker() {
         // function menu card visibility setter (dexkit-resolved)
         functionMenuViewHolderClazz.firstMethodOrNullLogged {
             name = fmvhVisibilityName
-            parameters(Int::class.javaPrimitiveType ?: Int::class.javaObjectType)
+            parameters(Int::class)
         }?.safeHook {
             before {
                 args(0).set(View.GONE)
@@ -124,10 +124,7 @@ object HomeHooker : DexKitHooker() {
 
         functionSetViewAdapterClazz.firstMethodOrNullLogged {
             name = "onBindViewHolder"
-            parameters(
-                recyclerViewHolderClazz,
-                Int::class.javaPrimitiveType ?: Int::class.javaObjectType
-            )
+            parameters(recyclerViewHolderClazz, Int::class)
         }?.safeHook {
             after {
                 if (args(1).int() == 1) {
@@ -139,30 +136,25 @@ object HomeHooker : DexKitHooker() {
 
     private fun collapseDailyMomentCard(holder: Any?) {
         val itemView = extractItemView(holder)
-        val dailyMomentCardId = itemView.resources.getIdentifier("daily_moment_health_card", "id", HOOK_TARGET_PACKAGE)
+        val dailyMomentCardId =
+            itemView.resources.getIdentifier("daily_moment_health_card", "id", HOOK_TARGET_PACKAGE)
         if (dailyMomentCardId != 0) {
             itemView.findViewById<View>(dailyMomentCardId)?.let { collapseView(it) }
         }
         collapseView(itemView)
     }
 
-    private fun extractItemView(any: Any?): View = when (any) {
-        null -> throw IllegalStateException("extractItemView: argument is null")
-        is View -> any
-        else -> runCatching {
-            any.javaClass.getField("itemView").get(any) as? View
-        }.recoverCatching {
-            any.javaClass.getDeclaredField("itemView")
-                .apply { isAccessible = true }
-                .get(any) as? View
-        }.getOrElse {
-            throw IllegalStateException(
-                "extractItemView: failed to find itemView in ${any.javaClass.name}",
-                it
-            )
-        } ?: throw IllegalStateException(
-            "extractItemView: itemView in ${any.javaClass.name} is null or not a View"
-        )
+    private fun extractItemView(any: Any?): View {
+        checkNotNull(any) { "extractItemView: argument is null" }
+        if (any is View) return any
+        val itemView = any.asResolver().optional(silent = true).firstFieldOrNull {
+            name = "itemView"
+            type = View::class
+            superclass()
+        }?.getQuietly() as? View
+        return checkNotNull(itemView) {
+            "extractItemView: itemView not found or null in ${any.javaClass.name}"
+        }
     }
 
 }

@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -51,9 +52,12 @@ kotlin {
 dependencies {
     implementation(libs.androidx.core.ktx)
     compileOnly(libs.rovo89.xposed.api)
+    compileOnly(project(":xbinterface"))
     ksp(libs.yukihookapi.ksp.xposed)
     api(libs.yukihookapi)
     implementation(libs.kavaref.core)
     implementation(libs.kavaref.extension)
     implementation(libs.dexkit)
+    implementation(libs.garmin.fit)
+    implementation(libs.kotlinx.serialization.json)
 }

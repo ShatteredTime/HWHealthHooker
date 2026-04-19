@@ -1,6 +1,11 @@
 # Keep all xposed hook classes
 -keep class moe.evil.hwhh.xposed.** { *; }
 
+# xbinterface stubs — compileOnly types replaced at runtime by the host app's
+# real classes via HostClassLoaderBridge; they are intentionally absent from
+# our APK, so tell R8 not to complain.
+-dontwarn com.huawei.**
+
 # YukiHookAPI - relies heavily on reflection, ships no proguard rules
 -keep class com.highcapable.yukihookapi.** { *; }
 -dontwarn com.highcapable.yukihookapi.**

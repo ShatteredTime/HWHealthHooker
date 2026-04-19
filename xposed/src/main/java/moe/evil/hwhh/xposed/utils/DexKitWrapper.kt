@@ -1,7 +1,6 @@
 package moe.evil.hwhh.xposed.utils
 
 import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
-import com.highcapable.yukihookapi.hook.log.YLog
 import com.highcapable.yukihookapi.hook.param.PackageParam
 import moe.evil.hwhh.xposed.PREFS_NAME
 import org.luckypray.dexkit.DexKitBridge
@@ -28,16 +27,18 @@ class DexKitScope internal constructor(
     private val param: PackageParam,
     val bridge: DexKitBridge,
 ) {
+    private val log = HLog.of<DexKitScope>()
+
     fun loadHooker(vararg hooker: DexKitHooker) = hooker.forEach { h ->
         val key = h.javaClass.simpleName
         val enabled = param.prefs(PREFS_NAME).getBoolean(key, true)
         if (!enabled) {
-            YLog.debug("Hooker $key disabled by config")
+            log.debug { "Hooker $key disabled by config" }
             return@forEach
         }
         h.withBridge(bridge) {
             runCatching { param.loadHooker(h) }.onFailure { e ->
-                YLog.error("Failed to load hooker ${h.javaClass.name} in ${param.packageName}", e)
+                log.error(e) { "Failed to load hooker ${h.javaClass.name} in ${param.packageName}" }
             }
         }
     }
@@ -46,6 +47,7 @@ class DexKitScope internal constructor(
 class DexKitWrapper {
     companion object {
         private val soLoaded = AtomicBoolean(false)
+        private val log = HLog.of<DexKitWrapper>()
 
         private inline fun <R> withDexKit(classLoader: ClassLoader, block: (DexKitBridge) -> R): R {
             if (soLoaded.compareAndSet(false, true)) {
@@ -63,8 +65,9 @@ class DexKitWrapper {
     ) {
         param.loadApp(name) {
             if (onlyMainProcess && processName != mainProcessName) return@loadApp
-            YLog.info("Loaded $name by DexKitWrapper, process=$processName")
-            withDexKit(appClassLoader!!) { bridge ->
+            log.info { "Loaded $name by DexKitWrapper, process=$processName" }
+            val loader = checkNotNull(appClassLoader) { "appClassLoader is null for $name" }
+            withDexKit(loader) { bridge ->
                 initiate(DexKitScope(this, bridge))
             }
         }

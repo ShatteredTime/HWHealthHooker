@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "HWHealthHooker"
 include(":app")
 include(":xposed")
+include(":xbinterface")

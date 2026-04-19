@@ -3,6 +3,7 @@ package moe.evil.hwhh.ui.widget
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,7 +39,8 @@ data class SwitchItem(
 @Composable
 fun SwitchGroup(
     title: String,
-    items: List<SwitchItem>
+    items: List<SwitchItem>,
+    extraContent: (@Composable ColumnScope.() -> Unit)? = null
 ) {
     Text(
         text = title,
@@ -60,15 +62,24 @@ fun SwitchGroup(
             items.forEachIndexed { index, item ->
                 SettingsSwitchRow(item = item)
                 if (index < items.size - 1) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = Dimensions.SpaceXL),
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                        thickness = Dimensions.Divider.Thin
-                    )
+                    SettingsDivider()
                 }
+            }
+            if (extraContent != null) {
+                if (items.isNotEmpty()) SettingsDivider()
+                extraContent()
             }
         }
     }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = Dimensions.SpaceXL),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+        thickness = Dimensions.Divider.Thin
+    )
 }
 
 @Composable

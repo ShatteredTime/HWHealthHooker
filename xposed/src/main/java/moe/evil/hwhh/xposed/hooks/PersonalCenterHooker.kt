@@ -2,10 +2,14 @@ package moe.evil.hwhh.xposed.hooks
 
 import android.content.Context
 import android.view.View
-import com.highcapable.yukihookapi.hook.log.YLog
+import com.highcapable.kavaref.KavaRef.Companion.asResolver
+import com.highcapable.kavaref.KavaRef.Companion.resolve
+import com.huawei.hwcommonmodel.application.BaseApplication
+import com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment
 import moe.evil.hwhh.xposed.DebugPrefs
 import moe.evil.hwhh.xposed.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.xposed.utils.DexKitHooker
+import moe.evil.hwhh.xposed.utils.HLog
 import moe.evil.hwhh.xposed.utils.collapseView
 import moe.evil.hwhh.xposed.utils.firstMethodOrNullLogged
 import moe.evil.hwhh.xposed.utils.ifDebugPref
@@ -18,11 +22,17 @@ object PersonalCenterHooker : DexKitHooker() {
     private const val MESSAGE_BOTTOM_RED_DOT_POSITION = 1
     private const val KAKA_PENDING_ID = "kaka_to_be_collected_text"
 
-    private var kakaManagerClassName: String? = null
-    private var kakaManagerGetterName: String? = null
-    private var kakaRedDotMethodName: String? = null
-    private var bottomRedDotMapFieldName: String? = null
-    private var redDotCallerClassNames: Set<String> = emptySet()
+    private data class Lookups(
+        val kakaManagerClassName: String,
+        val kakaManagerGetterName: String,
+        val kakaRedDotMethodName: String,
+        val bottomRedDotMapFieldName: String,
+        val redDotCallerClassNames: Set<String>,
+    )
+
+    private val log = HLog.of<PersonalCenterHooker>()
+
+    private var lookups: Lookups? = null
 
     override fun onHook() = tryHookWithDexKit { bridge ->
         val customHeadViewClazz = context(this@PersonalCenterHooker) {
@@ -41,9 +51,8 @@ object PersonalCenterHooker : DexKitHooker() {
         }.single()
 
         val kmClassName = kakaRedDotMethodData.className
-        kakaManagerClassName = kmClassName
-        kakaRedDotMethodName = kakaRedDotMethodData.name
-        kakaManagerGetterName = bridge.findMethod {
+        val kakaRedDotMethodName = kakaRedDotMethodData.name
+        val kakaManagerGetterName = bridge.findMethod {
             matcher {
                 declaredClass = kmClassName
                 paramTypes("android.content.Context")
@@ -51,10 +60,12 @@ object PersonalCenterHooker : DexKitHooker() {
             }
         }.single().name
 
+        val chvClassName = "com.huawei.ui.main.stories.userprofile.scroll.CustomHeadView"
+
         val chvKakaVisibilityName = bridge.findMethod {
             searchPackages("com.huawei.ui.main.stories.userprofile.scroll")
             matcher {
-                declaredClass = "com.huawei.ui.main.stories.userprofile.scroll.CustomHeadView"
+                declaredClass = chvClassName
                 modifiers = java.lang.reflect.Modifier.PUBLIC
                 paramTypes("int")
                 returnType = "void"
@@ -64,7 +75,7 @@ object PersonalCenterHooker : DexKitHooker() {
             val withFindView = bridge.findMethod {
                 searchPackages("com.huawei.ui.main.stories.userprofile.scroll")
                 matcher {
-                    declaredClass = "com.huawei.ui.main.stories.userprofile.scroll.CustomHeadView"
+                    declaredClass = chvClassName
                     modifiers = java.lang.reflect.Modifier.PUBLIC
                     paramTypes("int")
                     returnType = "void"
@@ -78,18 +89,19 @@ object PersonalCenterHooker : DexKitHooker() {
         val chvKakaTextSetterName = bridge.findMethod {
             searchPackages("com.huawei.ui.main.stories.userprofile.scroll")
             matcher {
-                declaredClass = "com.huawei.ui.main.stories.userprofile.scroll.CustomHeadView"
+                declaredClass = chvClassName
                 paramTypes("java.lang.String")
                 returnType = "void"
                 addInvoke { name = "getText" }
             }
         }.single().name
 
+        val pcfClassName = "com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment"
+
         val pcfSetUnreadMsgName = bridge.findMethod {
             searchPackages("com.huawei.ui.main.stories.userprofile.activity")
             matcher {
-                declaredClass =
-                    "com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment"
+                declaredClass = pcfClassName
                 usingStrings = listOf("Enter setUnreadMessageNum unreadMessageNum:")
             }
         }.single().name
@@ -97,8 +109,7 @@ object PersonalCenterHooker : DexKitHooker() {
         val pcfKakaRedDotUpdaterName = bridge.findMethod {
             searchPackages("com.huawei.ui.main.stories.userprofile.activity")
             matcher {
-                declaredClass =
-                    "com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment"
+                declaredClass = pcfClassName
                 returnType = "void"
                 addInvoke { name = "setBottomRedDotVisibility" }
                 addInvoke { name = "cancelBottomRedDotVisible" }
@@ -109,17 +120,15 @@ object PersonalCenterHooker : DexKitHooker() {
             }
         }.single().name
 
-        bottomRedDotMapFieldName = bridge.findField {
+        val bottomRedDotMapFieldName = bridge.findField {
             searchPackages("com.huawei.ui.main.stories.userprofile.activity")
             matcher {
-                declaredClass =
-                    "com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment"
+                declaredClass = pcfClassName
                 type = "java.util.Map"
             }
         }.single().name
 
-        val pcfClassName = "com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment"
-        redDotCallerClassNames = bridge.findMethod {
+        val redDotCallerClassNames = bridge.findMethod {
             searchPackages("com.huawei.ui.main.stories.userprofile")
             matcher {
                 addInvoke {
@@ -128,6 +137,14 @@ object PersonalCenterHooker : DexKitHooker() {
                 }
             }
         }.map { it.className }.filter { it != pcfClassName }.toSet()
+
+        lookups = Lookups(
+            kakaManagerClassName = kmClassName,
+            kakaManagerGetterName = kakaManagerGetterName,
+            kakaRedDotMethodName = kakaRedDotMethodName,
+            bottomRedDotMapFieldName = bottomRedDotMapFieldName,
+            redDotCallerClassNames = redDotCallerClassNames,
+        )
 
         // kaka visibility setter on CustomHeadView (dexkit-resolved)
         customHeadViewClazz.firstMethodOrNullLogged {
@@ -168,7 +185,7 @@ object PersonalCenterHooker : DexKitHooker() {
                 } else {
                     original
                 }
-                YLog.debug("PersonalCenterFragment#b: original=$original, fixed=$fixedCount")
+                log.debug { "PersonalCenterFragment#b: original=$original, fixed=$fixedCount" }
                 args(0).set(fixedCount)
             }
             after {
@@ -190,7 +207,7 @@ object PersonalCenterHooker : DexKitHooker() {
         ifDebugPref(DebugPrefs.RED_DOT) {
             fun traceBottomRedDotMutation(host: Any?, action: String, position: Int) {
                 val map = getBottomRedDotMap(host)
-                val callerNames = redDotCallerClassNames
+                val callerNames = lookups?.redDotCallerClassNames.orEmpty()
                 val stack = Throwable()
                     .stackTrace
                     .filter {
@@ -200,7 +217,7 @@ object PersonalCenterHooker : DexKitHooker() {
                     }
                     .take(12)
                     .joinToString(" <- ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
-                YLog.debug("bottomRedDot action=$action position=$position map=$map stack=$stack")
+                log.debug { "bottomRedDot action=$action position=$position map=$map stack=$stack" }
             }
 
             personalCenterFragmentClazz.firstMethodOrNullLogged {
@@ -236,41 +253,30 @@ object PersonalCenterHooker : DexKitHooker() {
     }
 
     private fun hasKakaRedDot(): Boolean {
-        val context = getBaseContext() ?: return false
-        val className = kakaManagerClassName ?: return false
-        val getterName = kakaManagerGetterName ?: return false
-        val redDotName = kakaRedDotMethodName ?: return false
-        return runCatching {
-            val managerClazz = context(this@PersonalCenterHooker) {
-                className.toClassOrLog()
-            } ?: return@runCatching false
-            val manager = managerClazz.getMethod(getterName, Context::class.java)
-                .invoke(null, context) ?: return@runCatching false
-            manager.javaClass.getMethod(redDotName).invoke(manager) as? Boolean ?: false
-        }.getOrDefault(false)
+        val l = lookups ?: return false
+        val context = BaseApplication.getContext() ?: return false
+        val managerClazz = context(this@PersonalCenterHooker) {
+            l.kakaManagerClassName.toClassOrLog()
+        } ?: return false
+        val manager = managerClazz.resolve().optional(silent = true).firstMethodOrNull {
+            name = l.kakaManagerGetterName
+            parameters(Context::class)
+        }?.invokeQuietly(context) ?: return false
+        return manager.asResolver().optional(silent = true).firstMethodOrNull {
+            name = l.kakaRedDotMethodName
+            emptyParameters()
+        }?.invokeQuietly() as? Boolean ?: false
     }
 
-    private fun getBaseContext(): Context? = runCatching {
-        context(this@PersonalCenterHooker) {
-            "com.huawei.hwcommonmodel.application.BaseApplication".toClassOrLog()
-        }?.getMethod("getContext")
-            ?.invoke(null) as? Context
-    }.getOrNull()
-
     private fun getBottomRedDotMap(host: Any?): Map<*, *>? {
-        val fieldName = bottomRedDotMapFieldName ?: return null
         if (host == null) return null
-        return host.javaClass.getDeclaredField(fieldName)
-            .apply { isAccessible = true }.get(host) as? Map<*, *>
+        val fieldName = lookups?.bottomRedDotMapFieldName ?: return null
+        return host.asResolver().optional(silent = true).firstFieldOrNull {
+            name = fieldName
+        }?.getQuietly() as? Map<*, *>
     }
 
     private fun cancelBottomRedDot(host: Any?, position: Int) {
-        if (host == null) return
-        host.javaClass
-            .getMethod(
-                "cancelBottomRedDotVisible",
-                Int::class.javaPrimitiveType ?: Int::class.javaObjectType
-            )
-            .invoke(host, position)
+        (host as? PersonalCenterFragment)?.cancelBottomRedDotVisible(position)
     }
 }
