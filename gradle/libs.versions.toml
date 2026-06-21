@@ -13,6 +13,7 @@ kavaref-extension = "1.0.2"
 dexkit = "2.2.0"
 garmin-fit = "21.200.0"
 kotlinx-serialization-json = "1.11.0"
+gson = "2.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,6 +34,7 @@ kavaref-extension = { group = "com.highcapable.kavaref", name = "kavaref-extensi
 dexkit = { group = "org.luckypray", name = "dexkit", version.ref = "dexkit" }
 garmin-fit = { group = "com.garmin", name = "fit", version.ref = "garmin-fit" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

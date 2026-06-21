@@ -17,6 +17,8 @@ data class SportRecord(
     val heartRateTrack: List<TimedShort>,
     val altitudeTrack: List<TimedFloat>,
     val cadenceTrack: List<TimedShort>,
+    val powerTrack: List<TimedShort> = emptyList(),
+    val speedTrack: List<TimedFloat> = emptyList(),
 ) {
     @Serializable
     data class Summary(

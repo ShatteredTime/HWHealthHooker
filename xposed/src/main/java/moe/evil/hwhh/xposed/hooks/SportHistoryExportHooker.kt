@@ -55,37 +55,38 @@ object SportHistoryExportHooker : DexKitHooker() {
             return@tryHookWithDexKit
         }
 
-        val jacInnerClassName = bridge.findClass {
+        val detailMarkerInners = bridge.findClass {
             matcher {
                 usingStrings = listOf("requestTrackDetailData onResult map is empty.")
             }
-        }.singleOrNull { it.name.contains('$') }?.name
-        log.debug { "Detail (jac#c): picked inner=$jacInnerClassName" }
-        val detailMethod = jacInnerClassName?.let { innerName ->
-            val outerName = innerName.substringBeforeLast('$')
-            val matches = bridge.findMethod {
+        }.filter { it.name.contains('$') }
+        log.debug { "Detail (jac#c): marker inner classes=${detailMarkerInners.map { it.name }}" }
+
+        fun findDetailBuilder(innerName: String, requireReadHiHealthData: Boolean) =
+            bridge.findMethod {
                 matcher {
-                    declaredClass = outerName
+                    declaredClass = innerName.substringBeforeLast('$')
                     paramTypes("long", "long", "com.huawei.hwbasemgr.IBaseResponseCallback")
                     returnType = "void"
                     addInvoke {
                         name = "<init>"
                         declaredClass = innerName
                     }
+                    if (requireReadHiHealthData) addInvoke { name = "readHiHealthData" }
                 }
-            }
-            val md = matches.singleOrNull { Modifier.isStatic(it.modifiers) }
-            log.debug { "Detail (jac#c): outer-class candidates=${matches.size}, picked=${md?.className}.${md?.name}" }
-            md?.let {
-                val cls = context(this@SportHistoryExportHooker) { it.className.toClassOrLog() }
-                cls?.resolve()?.optional(silent = true)?.firstMethodOrNull {
-                    name = it.name
-                    parameters(
-                        Long::class,
-                        Long::class,
-                        IBaseResponseCallback::class.java,
-                    )
-                }
+            }.singleOrNull { Modifier.isStatic(it.modifiers) }
+        val detailMd = detailMarkerInners.firstNotNullOfOrNull { findDetailBuilder(it.name, true) }
+            ?: detailMarkerInners.singleOrNull()?.name?.let { findDetailBuilder(it, false) }
+        log.debug { "Detail (jac#c): picked=${detailMd?.className}.${detailMd?.name}" }
+        val detailMethod = detailMd?.let { md ->
+            val cls = context(this@SportHistoryExportHooker) { md.className.toClassOrLog() }
+            cls?.resolve()?.optional(silent = true)?.firstMethodOrNull {
+                name = md.name
+                parameters(
+                    Long::class,
+                    Long::class,
+                    IBaseResponseCallback::class.java,
+                )
             }
         } ?: run {
             log.warn { "Detail method not resolved" }
@@ -198,7 +199,7 @@ object SportHistoryExportHooker : DexKitHooker() {
             activity.toast("Batch export unavailable (lookups failed)")
             return
         }
-        activity.toast("Batch exporting outdoor running...")
+        activity.toast("Batch exporting activities...")
         thread {
             runCatching {
                 val dir = activity.applicationContext.ensureExportDir() ?: run {
@@ -208,7 +209,7 @@ object SportHistoryExportHooker : DexKitHooker() {
                 val now = System.currentTimeMillis()
                 val start = now - YEARS_BACK * MS_PER_YEAR
                 log.debug { "Querying range start=$start end=$now" }
-                val result = b.exportOutdoorRunning(
+                val result = b.exportSupported(
                     activity.applicationContext,
                     dir,
                     start,

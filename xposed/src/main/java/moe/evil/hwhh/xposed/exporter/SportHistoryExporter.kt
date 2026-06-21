@@ -93,7 +93,7 @@ class SportHistoryExporter(
     }.getOrElse { OneOutcome.Error(it) }
 
 
-    fun exportOutdoorRunning(
+    fun exportSupported(
         context: Context,
         dir: File,
         startMs: Long,
@@ -101,15 +101,13 @@ class SportHistoryExporter(
         onProgress: (done: Int, total: Int) -> Unit,
     ): HistoryExportStats {
         val summaries = invokeQuery<RecordData>(summaryMethod, startMs, endMs)
-        val outdoorRunning = summaries.filter {
-            it.sportType == HuaweiSportType.OUTDOOR_RUNNING.code
-        }
-        log.debug { "ExportOutdoorRunning summaries=${summaries.size} filtered(outdoor running)=${outdoorRunning.size}" }
-        if (outdoorRunning.isEmpty()) return HistoryExportStats(0, 0, 0, 0)
+        val supported = summaries.filter { HuaweiSportType.of(it.sportType) != null }
+        log.debug { "ExportSupported summaries=${summaries.size} filtered(supported)=${supported.size}" }
+        if (supported.isEmpty()) return HistoryExportStats(0, 0, 0, 0)
         var exported = 0
         var missingSequence = 0
         var failed = 0
-        outdoorRunning.forEachIndexed { idx, summary ->
+        supported.forEachIndexed { idx, summary ->
             val start = summary.startTime
             val end = summary.endTime
             val hd = invokeQuery<HiHealthData>(detailMethod, start, end).firstOrNull()
@@ -167,8 +165,8 @@ class SportHistoryExporter(
                     }
                 }
             }
-            onProgress(idx + 1, outdoorRunning.size)
+            onProgress(idx + 1, supported.size)
         }
-        return HistoryExportStats(outdoorRunning.size, exported, missingSequence, failed)
+        return HistoryExportStats(supported.size, exported, missingSequence, failed)
     }
 }

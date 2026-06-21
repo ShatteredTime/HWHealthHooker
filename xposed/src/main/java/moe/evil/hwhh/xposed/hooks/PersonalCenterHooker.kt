@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.View
 import com.highcapable.kavaref.KavaRef.Companion.asResolver
 import com.highcapable.kavaref.KavaRef.Companion.resolve
-import com.huawei.hwcommonmodel.application.BaseApplication
 import com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment
 import moe.evil.hwhh.xposed.DebugPrefs
 import moe.evil.hwhh.xposed.HOOK_TARGET_PACKAGE
@@ -252,9 +251,17 @@ object PersonalCenterHooker : DexKitHooker() {
         if (textId != 0) collapseView(rootView.findViewById(textId))
     }
 
+    private fun hostAppContext(): Context? =
+        context(this@PersonalCenterHooker) {
+            "com.huawei.hwcommonmodel.application.BaseApplication".toClassOrLog()
+        }?.resolve()?.optional(silent = true)?.firstMethodOrNull {
+            name = "getContext"
+            emptyParameters()
+        }?.invokeQuietly() as? Context
+
     private fun hasKakaRedDot(): Boolean {
         val l = lookups ?: return false
-        val context = BaseApplication.getContext() ?: return false
+        val context = hostAppContext() ?: return false
         val managerClazz = context(this@PersonalCenterHooker) {
             l.kakaManagerClassName.toClassOrLog()
         } ?: return false

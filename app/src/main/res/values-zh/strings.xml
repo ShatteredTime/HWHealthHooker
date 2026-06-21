@@ -14,7 +14,7 @@
     <string name="hook_sport_data_export_title">运动数据导出</string>
     <string name="hook_sport_data_export_subtitle">将当前运动导出为 FIT/JSON</string>
     <string name="hook_sport_history_export_title">运动历史导出</string>
-    <string name="hook_sport_history_export_subtitle">批量导出户外跑步</string>
+    <string name="hook_sport_history_export_subtitle">批量导出运动</string>
     <string name="debug_settings_title">调试设置</string>
     <string name="debug_red_dot_title">个人页红点调试</string>
     <string name="debug_red_dot_subtitle">输出个人页红点消息源</string>

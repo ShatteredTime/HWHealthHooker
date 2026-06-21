@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 object HostClassLoaderBridge {
     private val hostPrefixes = arrayOf(
         "com.huawei.",
+        "com.google.gson.annotations.",
     )
 
     private val installed = AtomicBoolean(false)

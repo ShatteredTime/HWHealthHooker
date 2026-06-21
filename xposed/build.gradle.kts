@@ -60,4 +60,5 @@ dependencies {
     implementation(libs.dexkit)
     implementation(libs.garmin.fit)
     implementation(libs.kotlinx.serialization.json)
+    compileOnly(libs.gson)
 }
