@@ -6,6 +6,10 @@
 # our APK, so tell R8 not to complain.
 -dontwarn com.huawei.**
 
+# gson @SerializedName — read off host objects and resolved to the host's gson
+# via HostClassLoaderBridge; compileOnly, so absent from our APK by design.
+-dontwarn com.google.gson.annotations.**
+
 # YukiHookAPI - relies heavily on reflection, ships no proguard rules
 -keep class com.highcapable.yukihookapi.** { *; }
 -dontwarn com.highcapable.yukihookapi.**
