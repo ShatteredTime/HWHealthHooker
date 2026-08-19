@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Health data export dialog -->
+    <string name="hwhh_export_title">Health Data Export</string>
+    <string name="hwhh_loading_types">Reading available data types…</string>
+    <string name="hwhh_no_types">No readable health data types found</string>
+    <string name="hwhh_types_unavailable_title">Types unavailable</string>
+    <string name="hwhh_types_unavailable">Failed to enumerate local health data types. See log.</string>
+    <string name="hwhh_metadata_degraded">ID names unavailable, showing raw IDs (see log)</string>
+    <string name="hwhh_dialog_unavailable">Host dialog unavailable (lookup failed), see log</string>
+    <string name="hwhh_metadata_unavailable_title">Metadata unavailable</string>
+    <string name="hwhh_metadata_unavailable_message">An error occurred:\n\n%1$s\n\nExport without metadata?</string>
+    <string name="hwhh_row_time">Time range</string>
+    <string name="hwhh_row_id">ID range</string>
+    <string name="hwhh_id_summary">%1$d / %2$d selected</string>
+    <string name="hwhh_select_all">Select all / none</string>
+    <string name="hwhh_no_type_selected">No type selected, export cancelled</string>
+    <string name="hwhh_exporting">Exporting…</string>
+    <string name="hwhh_export_failed">Export failed: %1$s</string>
+    <string name="hwhh_export_failed_title">Export failed</string>
+    <!-- Single activity FIT export -->
+    <string name="hwhh_export_fit">Export FIT</string>
+    <string name="hwhh_export_dir_failed">Failed to create export directory</string>
+    <string name="hwhh_record_export_unsupported_title">FIT unsupported</string>
+    <string name="hwhh_record_export_unsupported">JSON only — sportType=%1$d not yet supported for FIT.\n%2$s</string>
+    <string name="hwhh_record_export_fit_failed_title">FIT export failed</string>
+    <string name="hwhh_record_export_fit_failed">JSON done. FIT failed: %1$s\n%2$s</string>
+    <!-- Batch activity export -->
+    <string name="hwhh_batch_export">Batch Export</string>
+    <string name="hwhh_batch_preparing">Preparing batch export…</string>
+    <string name="hwhh_batch_done_title">Batch export finished</string>
+    <string name="hwhh_batch_done">%1$d OK, %2$d no-GPS, %3$d failed (total %4$d)\n\n%5$s</string>
+    <string name="hwhh_batch_failed_title">Batch export failed</string>
+    <string name="hwhh_batch_failed">Batch failed: %1$s</string>
+    <!-- Sharing -->
+    <string name="hwhh_share_title">Share export</string>
+    <string name="hwhh_share_zipping">Packing archive…</string>
+    <string name="hwhh_share_failed_title">Share failed</string>
+    <string name="hwhh_share_failed">Share failed: %1$s</string>
+    <!-- Shared actions -->
+    <string name="hwhh_error_detail">An error occurred:\n\n%1$s</string>
+    <string name="hwhh_ok">OK</string>
+    <string name="hwhh_cancel">Cancel</string>
+    <string name="hwhh_yes">Yes</string>
+    <string name="hwhh_no">No</string>
+    <string name="hwhh_export">Export</string>
+</resources>

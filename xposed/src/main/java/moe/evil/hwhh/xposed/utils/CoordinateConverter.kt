@@ -20,7 +20,7 @@ object CoordinateConverter {
         return (lat - (gcjLat - lat)) to (lon - (gcjLon - lon))
     }
 
-    private fun outOfChina(lat: Double, lon: Double): Boolean =
+    private fun outOfChina(lat: Double, lon: Double) =
         lon !in LON_MIN..LON_MAX || lat < LAT_MIN || lat > LAT_MAX
 
     private fun gcj02Encrypt(lat: Double, lon: Double): Pair<Double, Double> {

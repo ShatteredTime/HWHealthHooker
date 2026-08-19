@@ -18,13 +18,17 @@ enum class HuaweiSportType(
     OUTDOOR_CYCLING(
         259, "Outdoor Cycling", Sport.CYCLING, SubSport.GENERIC,
         cadenceIsStepRate = false, hasCyclingMetrics = true,
+    ),
+    INDOOR_RUNNING(
+        264, "Indoor Running", Sport.RUNNING, SubSport.GENERIC,
+        cadenceIsStepRate = true, hasCyclingMetrics = false,
     );
 
     companion object {
-        private val byCode: Map<Int, HuaweiSportType> =
+        private val byCode =
             entries.associateBy(HuaweiSportType::code)
 
-        fun of(code: Int): HuaweiSportType? = byCode[code]
+        fun of(code: Int) = byCode[code]
     }
 }
 

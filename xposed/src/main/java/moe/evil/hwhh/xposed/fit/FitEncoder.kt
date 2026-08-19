@@ -1,7 +1,19 @@
 package moe.evil.hwhh.xposed.fit
 
-import com.garmin.fit.*
-import com.garmin.fit.File as FitFile
+import com.garmin.fit.ActivityMesg
+import com.garmin.fit.DateTime
+import com.garmin.fit.DeviceIndex
+import com.garmin.fit.DeviceInfoMesg
+import com.garmin.fit.Event
+import com.garmin.fit.EventMesg
+import com.garmin.fit.EventType
+import com.garmin.fit.FileEncoder
+import com.garmin.fit.FileIdMesg
+import com.garmin.fit.Fit
+import com.garmin.fit.LapMesg
+import com.garmin.fit.Manufacturer
+import com.garmin.fit.RecordMesg
+import com.garmin.fit.SessionMesg
 import com.garmin.fit.util.SemicirclesConverter
 import moe.evil.hwhh.xposed.model.HuaweiSportType
 import moe.evil.hwhh.xposed.model.SportRecord
@@ -17,13 +29,13 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import com.garmin.fit.File as FitFile
 
 object FitEncoder {
-
-    private const val MANUFACTURER = Manufacturer.DEVELOPMENT
-    private const val PRODUCT_ID = 0
+    private const val MANUFACTURER = Manufacturer.HUAWEI
+    private const val PRODUCT_ID = 0x717771 // qwq
     private const val PRODUCT_NAME = "HWHealthExport"
-    private const val SERIAL_NUMBER = 0x48574848L // "HWHH"
+    private const val SERIAL_NUMBER = 0x48574848L // hwhh
 
     fun encode(record: SportRecord, outputFile: File) {
         val sport = requireNotNull(record.huaweiSport) {
@@ -40,7 +52,8 @@ object FitEncoder {
         val power = record.powerTrack
         val speed = record.speedTrack
 
-        val records = buildRecords(gps, hr, alt, cad, power, speed, record.startTimeMs, record.endTimeMs)
+        val records =
+            buildRecords(gps, hr, alt, cad, power, speed, record.startTimeMs, record.endTimeMs)
         val fitStart = DateTime(Date(record.startTimeMs))
         val fitEnd = DateTime(Date(record.endTimeMs))
 

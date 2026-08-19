@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 pluginManagement {
     repositories {
         google {
@@ -10,6 +12,9 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+}
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 dependencyResolutionManagement {
@@ -24,5 +29,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "HWHealthHooker"
 include(":app")
+include(":shared")
 include(":xposed")
+include(":kdxref")
 include(":xbinterface")
+include(":analyzer")

@@ -4,13 +4,15 @@ import com.huawei.hwfoundationmodel.trackmodel.MotionPath
 import com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify
 import com.huawei.hwfoundationmodel.trackmodel.TimeSequence
 import com.huawei.hwfoundationmodel.trackmodel.ValueSequence
+import moe.evil.hwhh.kdxref.fieldBySerializedName
+import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.model.SportRecord.GpsPoint
 import moe.evil.hwhh.xposed.model.SportRecord.Summary
 import moe.evil.hwhh.xposed.model.SportRecord.TimedFloat
 import moe.evil.hwhh.xposed.model.SportRecord.TimedShort
-import moe.evil.hwhh.xposed.utils.fieldBySerializedName
 
 object SportRecordParser {
+    private val log = HLog.of<SportRecordParser>()
     private const val INVALID_SENTINEL_LAT = 90.0
     private const val INVALID_SENTINEL_LON = -80.0
     private const val SPEED_RAW_PER_MS = 10f
@@ -58,7 +60,7 @@ object SportRecordParser {
         )
     }
 
-    private fun parseGpsTrack(mp: MotionPath): List<GpsPoint> =
+    private fun parseGpsTrack(mp: MotionPath) =
         mp.requestLbsDataMap()?.values.orEmpty()
             .mapNotNull { it.toGpsPoint() }
             .sortedBy { it.timeMs }
@@ -74,24 +76,28 @@ object SportRecordParser {
         return GpsPoint(timeMs = timeSec * 1000, lat = lat, lon = lon)
     }
 
-    private inline fun <E : TimeSequence> List<E>?.toShortTrack(value: (E) -> Int?): List<TimedShort> =
+    private inline fun <E : TimeSequence> List<E>?.toShortTrack(value: (E) -> Int?) =
         orEmpty().mapNotNull { e -> value(e)?.let { TimedShort(e.acquireTime(), it.toShort()) } }
 
-    private inline fun <E : TimeSequence> List<E>?.toFloatTrack(value: (E) -> Float?): List<TimedFloat> =
+    private inline fun <E : TimeSequence> List<E>?.toFloatTrack(value: (E) -> Float?) =
         orEmpty().mapNotNull { e -> value(e)?.let { TimedFloat(e.acquireTime(), it) } }
 
-    private fun <E : Any> List<E>.numberReader(serializedName: String): ((E) -> Number?)? =
-        firstOrNull()?.javaClass?.fieldBySerializedName(serializedName)?.let { field ->
-            { element -> field.get(element) as? Number }
+    private fun <E : Any> List<E>.numberReader(serializedName: String): ((E) -> Number?)? {
+        val sample = firstOrNull() ?: return null
+        val field = sample.javaClass.fieldBySerializedName(serializedName) ?: run {
+            log.warn { "SerializedName($serializedName) gone from ${sample.javaClass.name}" }
+            return null
         }
+        return { element -> field.get(element) as? Number }
+    }
 
-    private fun parseHeartRateTrack(mp: MotionPath): List<TimedShort> =
+    private fun parseHeartRateTrack(mp: MotionPath) =
         mp.requestHeartRateList().toShortTrack { it.acquireHeartRate().takeIf { hr -> hr > 0 } }
 
-    private fun parseStepRateCadenceTrack(mp: MotionPath): List<TimedShort> =
+    private fun parseStepRateCadenceTrack(mp: MotionPath) =
         mp.requestStepRateList().toShortTrack { it.acquireStepRate().takeIf { spm -> spm > 0 } }
 
-    private fun parsePowerTrack(mp: MotionPath): List<TimedShort> =
+    private fun parsePowerTrack(mp: MotionPath) =
         mp.requestPowerList()
             .toShortTrack { (it as? ValueSequence)?.acquireValue()?.takeIf { w -> w >= 0 } }
 

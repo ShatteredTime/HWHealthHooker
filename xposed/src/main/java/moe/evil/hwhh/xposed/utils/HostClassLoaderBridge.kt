@@ -1,6 +1,8 @@
 package moe.evil.hwhh.xposed.utils
 
 import android.annotation.SuppressLint
+import com.highcapable.kavaref.extension.classOf
+import moe.evil.hwhh.shared.log.HLog
 import java.lang.reflect.Field
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -8,7 +10,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 object HostClassLoaderBridge {
     private val hostPrefixes = arrayOf(
         "com.huawei.",
-        "com.google.gson.annotations.",
+        "com.google.gson.",
+        "net.zetetic.",
     )
 
     private val installed = AtomicBoolean(false)
@@ -19,10 +22,14 @@ object HostClassLoaderBridge {
     private val log = HLog.of<HostClassLoaderBridge>()
 
     fun install(host: ClassLoader?) {
-        if (host == null) return
+        if (host == null) {
+            log.warn { "Not injected: host ClassLoader is null, stub types stay unbridged" }
+            return
+        }
         if (!installed.compareAndSet(false, true)) return
-        val moduleLoader = HostClassLoaderBridge::class.java.classLoader ?: run {
+        val moduleLoader = classOf<HostClassLoaderBridge>().classLoader ?: run {
             installed.set(false)
+            log.warn { "Not injected: module ClassLoader is null, stub types stay unbridged" }
             return
         }
         runCatching {
@@ -32,13 +39,13 @@ object HostClassLoaderBridge {
             log.info { "Injected, prefixes=${hostPrefixes.contentToString()}" }
         }.onFailure { e ->
             installed.set(false)
-            log.warn { "Inject failed: ${e.javaClass.simpleName}: ${e.message}" }
+            log.warn(e) { "Inject failed, stub types stay unbridged" }
         }
     }
 
     @SuppressLint("DiscouragedPrivateApi")
     private fun setParent(loader: ClassLoader, parent: ClassLoader?) {
-        val f = parentField ?: ClassLoader::class.java.getDeclaredField("parent")
+        val f = parentField ?: classOf<ClassLoader>().getDeclaredField("parent")
             .apply { isAccessible = true }
             .also { parentField = it }
         f.set(loader, parent)

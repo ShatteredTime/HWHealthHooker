@@ -1,15 +1,27 @@
+import hwhh.codegen.GenerateHookRegistry
+import hwhh.codegen.RegistryTarget
+import hwhh.codegen.hookRegistryCodegen
+import hwhh.codegen.registerHookRegistry
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.kotlin.serialization)
 }
 
+val codegenClasspath = hookRegistryCodegen(libs.kotlin.compiler.embeddable, libs.kotlinpoet)
+
+androidComponents {
+    onVariants { variant ->
+        val task = registerHookRegistry(RegistryTarget.XPOSED, variant.name, codegenClasspath)
+        variant.sources.kotlin?.addGeneratedSourceDirectory(task, GenerateHookRegistry::outputDir)
+    }
+}
+
 android {
     namespace = "moe.evil.hwhh.xposed"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 36
@@ -40,7 +52,6 @@ kotlin {
 
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
-        freeCompilerArgs.add("-Xcontext-parameters")
         freeCompilerArgs.addAll(
             "-Xno-param-assertions",
             "-Xno-call-assertions",
@@ -50,15 +61,13 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":shared"))
+    api(project(":kdxref"))
     implementation(libs.androidx.core.ktx)
     compileOnly(libs.rovo89.xposed.api)
     compileOnly(project(":xbinterface"))
     ksp(libs.yukihookapi.ksp.xposed)
     api(libs.yukihookapi)
-    implementation(libs.kavaref.core)
-    implementation(libs.kavaref.extension)
-    implementation(libs.dexkit)
     implementation(libs.garmin.fit)
     implementation(libs.kotlinx.serialization.json)
-    compileOnly(libs.gson)
 }

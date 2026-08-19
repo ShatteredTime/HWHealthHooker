@@ -3,57 +3,58 @@ package moe.evil.hwhh.xposed.hooks
 import android.app.Activity
 import android.os.Bundle
 import android.view.View
+import com.highcapable.kavaref.extension.classOf
 import com.huawei.hwfoundationmodel.trackmodel.MotionPath
 import com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify
 import com.huawei.ui.commonui.titlebar.CustomTitleBar
-import moe.evil.hwhh.xposed.HOOK_TARGET_PACKAGE
-import moe.evil.hwhh.xposed.exporter.RecordExporter
-import moe.evil.hwhh.xposed.exporter.ensureExportDir
-import moe.evil.hwhh.xposed.model.ExportOutcome
+import moe.evil.hwhh.kdxref.HostBridge
+import moe.evil.hwhh.kdxref.HostField
+import moe.evil.hwhh.kdxref.describe
+import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
+import moe.evil.hwhh.kdxref.hostField
+import moe.evil.hwhh.kdxref.safeHook
+import moe.evil.hwhh.kdxref.toClassOrLog
+import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
+import moe.evil.hwhh.shared.HookRoot
+import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.xposed.R
+import moe.evil.hwhh.xposed.model.SportRecordExportOutcome
 import moe.evil.hwhh.xposed.model.SportRecordParser
-import moe.evil.hwhh.xposed.utils.DexKitHooker
-import moe.evil.hwhh.xposed.utils.HLog
+import moe.evil.hwhh.xposed.sportdata.exporter.RecordExporter
+import moe.evil.hwhh.xposed.sportdata.exporter.ensureExportDir
+import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
+import moe.evil.hwhh.xposed.utils.ShareExporter
+import moe.evil.hwhh.xposed.utils.ShareOutcome
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
-import moe.evil.hwhh.xposed.utils.firstMethodOrNullLogged
-import moe.evil.hwhh.xposed.utils.rtField
-import moe.evil.hwhh.xposed.utils.safeHook
-import moe.evil.hwhh.xposed.utils.toClassOrLog
+import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
-import moe.evil.hwhh.xposed.utils.tryHookWithDexKit
 import java.io.File
 import kotlin.concurrent.thread
 
-object SportDataExportHooker : DexKitHooker() {
+@HookRoot(order = 3)
+object SportDataExportHooker : DexKitBaseHooker() {
     private const val TITLE_BAR_ID = "track_detail_title_bar"
-
+    private const val TRACK_DETAIL_PACKAGE = "com.huawei.healthcloud.plugintrack.ui.activity"
     private val log = HLog.of<SportDataExportHooker>()
+    private val commonUi by require { CommonUIHooker }
+    private var simplifyField: HostField<MotionPathSimplify>? = null
+    private var motionPathField: HostField<MotionPath>? = null
 
-    private var simplifyFieldName: String? = null
-    private var motionPathFieldName: String? = null
-
-    override fun onHook() = tryHookWithDexKit { bridge ->
+    override fun onHookWithDexKit(bridge: HostBridge) {
         val trackDetailClazz = context(this@SportDataExportHooker) {
             "com.huawei.healthcloud.plugintrack.ui.activity.TrackDetailActivity".toClassOrLog()
-        } ?: return@tryHookWithDexKit
+        } ?: return
 
-        simplifyFieldName = bridge.findField {
-            searchPackages("com.huawei.healthcloud.plugintrack.ui.activity")
-            matcher {
-                declaredClass = trackDetailClazz.name
-                type = MotionPathSimplify::class.java.name
-            }
-        }.singleOrNull()?.name
-        motionPathFieldName = bridge.findField {
-            searchPackages("com.huawei.healthcloud.plugintrack.ui.activity")
-            matcher {
-                declaredClass = trackDetailClazz.name
-                type = MotionPath::class.java.name
-            }
-        }.singleOrNull()?.name
+        simplifyField = hostField("TrackDetail#simplify", TRACK_DETAIL_PACKAGE) {
+            declaredClass(trackDetailClazz)
+        }
+        motionPathField = hostField("TrackDetail#motionPath", TRACK_DETAIL_PACKAGE) {
+            declaredClass(trackDetailClazz)
+        }
 
         trackDetailClazz.firstMethodOrNullLogged {
             name = "onCreate"
-            parameters(Bundle::class)
+            parameters(classOf<Bundle>())
         }?.safeHook {
             after {
                 val activity = instanceOrNull as? Activity ?: return@after
@@ -62,13 +63,10 @@ object SportDataExportHooker : DexKitHooker() {
         }
     }
 
-    private fun exportCurrentRecord(activity: Activity, dir: File): ExportOutcome? {
-        val sfName = simplifyFieldName ?: return null
-        val mpName = motionPathFieldName ?: return null
-        val simplifyObj = activity.rtField<MotionPathSimplify>(sfName) ?: return null
-        val motionPathObj = activity.rtField<MotionPath>(mpName) ?: return null
-        val record = SportRecordParser.parse(simplifyObj, motionPathObj)
-        return RecordExporter.export(record, dir)
+    private fun exportCurrentRecord(activity: Activity, dir: File): SportRecordExportOutcome {
+        val simplify = checkNotNull(simplifyField?.on(activity)) { "MotionPathSimplify unreadable" }
+        val motionPath = checkNotNull(motionPathField?.on(activity)) { "MotionPath unreadable" }
+        return RecordExporter.export(SportRecordParser.parse(simplify, motionPath), dir)
     }
 
     private fun addExportButton(activity: Activity) {
@@ -78,7 +76,7 @@ object SportDataExportHooker : DexKitHooker() {
             return
         }
         val titleBar = activity.findViewById<CustomTitleBar>(titleBarId) ?: run {
-            log.warn { "'$TITLE_BAR_ID' view not in layout of ${activity.javaClass.simpleName} (id=$titleBarId)" }
+            log.warn { "View '$TITLE_BAR_ID' not in layout of ${activity.javaClass.simpleName} (id=$titleBarId)" }
             return
         }
         val icon = runCatching {
@@ -87,36 +85,92 @@ object SportDataExportHooker : DexKitHooker() {
         }.getOrNull() ?: runCatching {
             activity.getDrawable(android.R.drawable.stat_sys_upload_done)
         }.getOrNull()
-        titleBar.setRightThirdKeyBackground(icon, "Export FIT")
+        titleBar.setRightThirdKeyBackground(icon, activity.moduleString(R.string.hwhh_export_fit))
         titleBar.setRightThirdKeyVisibility(View.VISIBLE)
         titleBar.setRightThirdKeyOnClickListener { onExportClicked(activity) }
         log.debug { "Export button added to TrackDetailActivity title bar" }
     }
 
     private fun onExportClicked(activity: Activity) {
-        activity.toast("Exporting...")
+        val progress = commonUi.createProgressDialog(
+            activity,
+            activity.moduleString(R.string.hwhh_exporting),
+        ).gracefulShow()
         thread {
             runCatching {
                 val dir = activity.applicationContext.ensureExportDir()
-                    ?: return@thread activity.toast("Failed to create export directory")
-                val outcome = exportCurrentRecord(activity, dir)
-                activity.toast(buildToastMessage(outcome, dir))
+                if (dir == null) {
+                    commonUi.createNoTitleCustomAlertDialog(
+                        activity = activity,
+                        message = activity.moduleString(R.string.hwhh_export_dir_failed),
+                        positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                    ).gracefulShow {
+                        toast(moduleString(R.string.hwhh_export_dir_failed))
+                    }
+                    return@runCatching
+                }
+                when (val outcome = exportCurrentRecord(activity, dir)) {
+                    is SportRecordExportOutcome.Success -> ShareExporter.share(
+                        activity = activity,
+                        target = outcome.file,
+                        chooserTitle = activity.moduleString(R.string.hwhh_share_title),
+                    ).let { shareOutcome ->
+                        if (shareOutcome !is ShareOutcome.Failed) return@let
+                        val cause = shareOutcome.error.describe()
+                        commonUi.createCustomTextAlertDialog(
+                            activity = activity,
+                            title = activity.moduleString(R.string.hwhh_share_failed_title),
+                            message = activity.moduleString(R.string.hwhh_error_detail, cause),
+                            positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                        ).gracefulShow {
+                            toast(moduleString(R.string.hwhh_share_failed, cause))
+                        }
+                    }
+
+                    is SportRecordExportOutcome.Unsupported -> {
+                        val message = activity.moduleString(
+                            R.string.hwhh_record_export_unsupported,
+                            outcome.record.sportType,
+                            dir.absolutePath,
+                        )
+                        commonUi.createCustomTextAlertDialog(
+                            activity = activity,
+                            title = activity.moduleString(
+                                R.string.hwhh_record_export_unsupported_title,
+                            ),
+                            message = message,
+                            positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                        ).gracefulShow { toast(message) }
+                    }
+
+                    is SportRecordExportOutcome.FitFailed -> {
+                        val message = activity.moduleString(
+                            R.string.hwhh_record_export_fit_failed,
+                            outcome.error.describe(),
+                            dir.absolutePath,
+                        )
+                        commonUi.createCustomTextAlertDialog(
+                            activity = activity,
+                            title = activity.moduleString(
+                                R.string.hwhh_record_export_fit_failed_title,
+                            ),
+                            message = message,
+                            positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                        ).gracefulShow { toast(message) }
+                    }
+                }
             }.onFailure { e ->
                 log.error(e) { "Export failed" }
-                activity.toast("Export failed: ${e.message}")
+                commonUi.createCustomTextAlertDialog(
+                    activity = activity,
+                    title = activity.moduleString(R.string.hwhh_export_failed_title),
+                    message = activity.moduleString(R.string.hwhh_error_detail, e.describe()),
+                    positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                ).gracefulShow {
+                    toast(moduleString(R.string.hwhh_export_failed, e.describe()))
+                }
             }
+            progress.dismiss()
         }
-    }
-
-    private fun buildToastMessage(outcome: ExportOutcome?, dir: File): String = when (outcome) {
-        null -> "No data on this record.\n${dir.absolutePath}"
-        is ExportOutcome.Success ->
-            "Export done! JSON + FIT (${outcome.sport.displayName})\n${dir.absolutePath}"
-
-        is ExportOutcome.Unsupported ->
-            "JSON only — sportType=${outcome.record.sportType} not yet supported for FIT.\n${dir.absolutePath}"
-
-        is ExportOutcome.FitFailed ->
-            "JSON done. FIT failed: ${outcome.error.message}\n${dir.absolutePath}"
     }
 }

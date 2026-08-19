@@ -7,7 +7,6 @@ import com.garmin.fit.MesgListener
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -16,7 +15,7 @@ import java.io.FileInputStream
 
 object FitInspector {
 
-    fun inspect(fitFile: File): JsonObject = buildJsonObject {
+    fun inspect(fitFile: File) = buildJsonObject {
         put("file", fitFile.name)
         put("size", fitFile.length())
         val messages = mutableListOf<JsonElement>()
@@ -34,7 +33,7 @@ object FitInspector {
         put("messages", JsonArray(messages))
     }
 
-    private fun mesgToJson(mesg: Mesg): JsonObject = buildJsonObject {
+    private fun mesgToJson(mesg: Mesg) = buildJsonObject {
         put("type", mesg.name ?: "unknown")
         put("num", mesg.num)
         put("fields", buildJsonObject {
@@ -42,7 +41,7 @@ object FitInspector {
         })
     }
 
-    private fun fieldToJson(field: Field): JsonElement = runCatching {
+    private fun fieldToJson(field: Field) = runCatching {
         when (val n = field.numValues) {
             0 -> JsonNull
             1 -> valueToJson(field.getValue(0))
@@ -50,7 +49,7 @@ object FitInspector {
         }
     }.getOrDefault(JsonNull)
 
-    private fun valueToJson(v: Any?): JsonElement = when (v) {
+    private fun valueToJson(v: Any?) = when (v) {
         null -> JsonNull
         is Float -> if (v.isNaN() || v.isInfinite()) JsonNull else JsonPrimitive(v)
         is Double -> if (v.isNaN() || v.isInfinite()) JsonNull else JsonPrimitive(v)

@@ -1,11 +1,16 @@
 package moe.evil.hwhh
 
+import android.Manifest
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,9 +34,12 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,35 +53,118 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.highcapable.yukihookapi.YukiHookAPI
 import com.highcapable.yukihookapi.hook.factory.prefs
 import kotlinx.coroutines.delay
+import moe.evil.hwhh.analysis.AnalysisController
+import moe.evil.hwhh.analysis.AnalysisNeed
+import moe.evil.hwhh.analysis.AnalysisService
+import moe.evil.hwhh.analysis.AnalysisState
+import moe.evil.hwhh.analysis.HealthIdAnalysis
+import moe.evil.hwhh.shared.DebugPrefs
+import moe.evil.hwhh.shared.DebugToggle
+import moe.evil.hwhh.shared.HookFeature
+import moe.evil.hwhh.shared.PREFS_NAME
+import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.LogLevel
 import moe.evil.hwhh.ui.theme.Dimensions
 import moe.evil.hwhh.ui.theme.HWHealthHookerTheme
+import moe.evil.hwhh.ui.widget.AboutDialog
+import moe.evil.hwhh.ui.widget.AnalysisClearDialog
+import moe.evil.hwhh.ui.widget.AnalysisProgressDialog
+import moe.evil.hwhh.ui.widget.AnalysisRequiredDialog
+import moe.evil.hwhh.ui.widget.AnalysisResultDialog
 import moe.evil.hwhh.ui.widget.ModuleStatusCard
 import moe.evil.hwhh.ui.widget.SwitchGroup
 import moe.evil.hwhh.ui.widget.SwitchItem
-import moe.evil.hwhh.xposed.DebugPrefs
-import moe.evil.hwhh.xposed.PREFS_NAME
-import moe.evil.hwhh.xposed.hooks.HomeHooker
-import moe.evil.hwhh.xposed.hooks.MessageCenterHooker
-import moe.evil.hwhh.xposed.hooks.PersonalCenterHooker
-import moe.evil.hwhh.xposed.hooks.SportDataExportHooker
-import moe.evil.hwhh.xposed.hooks.SportHistoryExportHooker
-import moe.evil.hwhh.xposed.utils.HLog
+import kotlin.time.Duration.Companion.milliseconds
+
+private val log = HLog.of<MainActivity>()
+private const val CONFIRM_WINDOW_MS = 10 * 60 * 1000L
+
+private fun HookFeature.presentation() = when (this) {
+    HookFeature.HOME -> Triple(
+        Icons.Outlined.Home,
+        R.string.hook_home_title,
+        R.string.hook_home_subtitle
+    )
+
+    HookFeature.MESSAGE_CENTER -> Triple(
+        Icons.Outlined.Email,
+        R.string.hook_message_center_title,
+        R.string.hook_message_center_subtitle
+    )
+
+    HookFeature.PERSONAL_CENTER -> Triple(
+        Icons.Outlined.Person,
+        R.string.hook_personal_center_title,
+        R.string.hook_personal_center_subtitle
+    )
+
+    HookFeature.SPORT_DATA_EXPORT -> Triple(
+        Icons.Outlined.FileDownload,
+        R.string.hook_sport_data_export_title,
+        R.string.hook_sport_data_export_subtitle
+    )
+
+    HookFeature.SPORT_HISTORY_EXPORT -> Triple(
+        Icons.Outlined.DownloadForOffline,
+        R.string.hook_sport_history_export_title,
+        R.string.hook_sport_history_export_subtitle
+    )
+
+    HookFeature.HEALTH_EXPORT -> Triple(
+        Icons.Outlined.MonitorHeart,
+        R.string.hook_health_export_title,
+        R.string.hook_health_export_subtitle
+    )
+}
+
+private fun DebugToggle.presentation() = when (this) {
+    DebugToggle.RED_DOT -> Triple(
+        Icons.Outlined.BugReport,
+        R.string.debug_red_dot_title,
+        R.string.debug_red_dot_subtitle
+    )
+
+    DebugToggle.HIDE_LAUNCHER_ICON -> Triple(
+        Icons.Outlined.VisibilityOff,
+        R.string.debug_hide_icon_title,
+        R.string.debug_hide_icon_subtitle
+    )
+
+    DebugToggle.VERBOSE_EXPORT -> Triple(
+        Icons.Outlined.DataObject,
+        R.string.debug_verbose_export_title,
+        R.string.debug_verbose_export_subtitle
+    )
+
+    DebugToggle.HEALTH_QUERY -> Triple(
+        Icons.Outlined.Terminal,
+        R.string.debug_health_query_title,
+        R.string.debug_health_query_subtitle
+    )
+}
 
 class MainActivity : ComponentActivity() {
+    private val config get() = prefs(PREFS_NAME)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -88,15 +179,21 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun MainScreen() {
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-        val isModuleActive = runCatching {
-            YukiHookAPI.Status.isXposedModuleActive
-        }.getOrDefault(false)
+        val isModuleActive = remember { YukiHookAPI.Status.isXposedModuleActive }
+        var showAbout by remember { mutableStateOf(false) }
+        // Hoisted so the debug section can gate on it: turning a hook off must grey out
+        // the debug toggles that DebugToggle.requiredBy attributes to it.
+        val hookEnabled = remember {
+            mutableStateMapOf<HookFeature, Boolean>().apply {
+                HookFeature.entries.forEach { put(it, config.getBoolean(it.key, true)) }
+            }
+        }
 
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
-            topBar = { MainTopAppBar(scrollBehavior) }
+            topBar = { MainTopAppBar(scrollBehavior, onTitleClick = { showAbout = true }) }
         ) { innerPadding ->
             LazyColumn(
                 modifier = Modifier
@@ -105,19 +202,47 @@ class MainActivity : ComponentActivity() {
                 contentPadding = PaddingValues(Dimensions.SpaceL),
                 verticalArrangement = Arrangement.spacedBy(Dimensions.SpaceL)
             ) {
-                item { ModuleStatusCard(isActive = isModuleActive) }
-                item { HookSettingsSection() }
-                item { DebugSettingsSection() }
+                item { ModuleStatusCard(isModuleActive) }
+                item { HookSettingsSection(hookEnabled, isModuleActive) }
+                item { DebugSettingsSection(hookEnabled, isModuleActive) }
             }
         }
+
+        if (showAbout) AboutDialog(onDismiss = { showAbout = false })
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    private fun MainTopAppBar(scrollBehavior: TopAppBarScrollBehavior) {
+    private fun MainTopAppBar(
+        scrollBehavior: TopAppBarScrollBehavior,
+        onTitleClick: () -> Unit
+    ) {
         LargeTopAppBar(
             title = {
-                Text(text = stringResource(R.string.app_name))
+                val title = stringResource(R.string.app_name)
+                val titleModifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(onClick = onTitleClick)
+                if (BuildConfig.DEBUG) {
+                    Row(
+                        modifier = titleModifier,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Text(text = title)
+                        Badge(
+                            modifier = Modifier.padding(start = Dimensions.SpaceXS),
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ) {
+                            Text(
+                                text = stringResource(R.string.debug_build_badge),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                } else {
+                    Text(text = title, modifier = titleModifier)
+                }
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -129,178 +254,209 @@ class MainActivity : ComponentActivity() {
 
     @Suppress("RedundantValueArgument")
     @Composable
-    private fun HookSettingsSection() {
-        val homeKey = HomeHooker.javaClass.simpleName
-        val msgKey = MessageCenterHooker.javaClass.simpleName
-        val personalKey = PersonalCenterHooker.javaClass.simpleName
-        val sportDataKey = SportDataExportHooker.javaClass.simpleName
-        val sportHistoryKey = SportHistoryExportHooker.javaClass.simpleName
+    private fun HookSettingsSection(
+        enabled: MutableMap<HookFeature, Boolean>,
+        moduleActive: Boolean
+    ) {
+        var analysisRevision by remember { mutableIntStateOf(0) }
+        var showClearDialog by remember { mutableStateOf(false) }
 
-        var homeEnabled by remember { mutableStateOf(getHookEnabled(homeKey)) }
-        var messageCenterEnabled by remember { mutableStateOf(getHookEnabled(msgKey)) }
-        var personalCenterEnabled by remember { mutableStateOf(getHookEnabled(personalKey)) }
-        var sportDataExportEnabled by remember { mutableStateOf(getHookEnabled(sportDataKey)) }
-        var sportHistoryExportEnabled by remember { mutableStateOf(getHookEnabled(sportHistoryKey)) }
-
-        val items = listOf(
+        val items = HookFeature.entries.map { feature ->
+            val (icon, title, subtitle) = feature.presentation()
             SwitchItem(
-                icon = Icons.Outlined.Home,
-                title = stringResource(R.string.hook_home_title),
-                subtitle = stringResource(R.string.hook_home_subtitle),
-                isChecked = homeEnabled,
-                onCheckedChange = { enabled ->
-                    homeEnabled = enabled
-                    saveHookEnabled(homeKey, enabled)
-                }
-            ),
-            SwitchItem(
-                icon = Icons.Outlined.Email,
-                title = stringResource(R.string.hook_message_center_title),
-                subtitle = stringResource(R.string.hook_message_center_subtitle),
-                isChecked = messageCenterEnabled,
-                onCheckedChange = { enabled ->
-                    messageCenterEnabled = enabled
-                    saveHookEnabled(msgKey, enabled)
-                }
-            ),
-            SwitchItem(
-                icon = Icons.Outlined.Person,
-                title = stringResource(R.string.hook_personal_center_title),
-                subtitle = stringResource(R.string.hook_personal_center_subtitle),
-                isChecked = personalCenterEnabled,
-                onCheckedChange = { enabled ->
-                    personalCenterEnabled = enabled
-                    saveHookEnabled(personalKey, enabled)
-                }
-            ),
-            SwitchItem(
-                icon = Icons.Outlined.FileDownload,
-                title = stringResource(R.string.hook_sport_data_export_title),
-                subtitle = stringResource(R.string.hook_sport_data_export_subtitle),
-                isChecked = sportDataExportEnabled,
-                onCheckedChange = { enabled ->
-                    sportDataExportEnabled = enabled
-                    saveHookEnabled(sportDataKey, enabled)
-                }
-            ),
-            SwitchItem(
-                icon = Icons.Outlined.DownloadForOffline,
-                title = stringResource(R.string.hook_sport_history_export_title),
-                subtitle = stringResource(R.string.hook_sport_history_export_subtitle),
-                isChecked = sportHistoryExportEnabled,
-                onCheckedChange = { enabled ->
-                    sportHistoryExportEnabled = enabled
-                    saveHookEnabled(sportHistoryKey, enabled)
-                }
+                icon = icon,
+                title = stringResource(title),
+                subtitle = stringResource(subtitle),
+                isChecked = enabled.getValue(feature),
+                enabled = moduleActive,
+                onCheckedChange = { checked ->
+                    saveHookEnabled(feature.key, checked)
+                    enabled[feature] = checked
+                },
+                onLongClick = { showClearDialog = true }
+                    .takeIf { feature == HookFeature.HEALTH_EXPORT }
             )
-        )
+        }
 
         SwitchGroup(
             title = stringResource(R.string.hook_settings_title),
             items = items
         )
+
+        if (showClearDialog) {
+            AnalysisClearDialog(
+                onDismiss = { showClearDialog = false },
+                onConfirm = {
+                    showClearDialog = false
+                    HealthIdAnalysis.clearDigests(this)
+                    analysisRevision++
+                    Toast.makeText(this, R.string.analysis_clear_done, Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+
+        if (moduleActive) HealthExportAnalysisGate(
+            enabled = enabled.getValue(HookFeature.HEALTH_EXPORT),
+            revision = analysisRevision,
+            onRevert = {
+                enabled[HookFeature.HEALTH_EXPORT] = false
+                saveHookEnabled(HookFeature.HEALTH_EXPORT.key, false)
+            }
+        )
     }
 
-    @Suppress("RedundantValueArgument")
     @Composable
-    private fun DebugSettingsSection() {
-        var redDotEnabled by remember {
-            mutableStateOf(
-                runCatching { prefs(PREFS_NAME).get(DebugPrefs.RED_DOT) }.getOrDefault(false)
+    private fun HealthExportAnalysisGate(
+        enabled: Boolean,
+        revision: Int,
+        onRevert: () -> Unit
+    ) {
+        val context = LocalContext.current
+        val state by AnalysisController.state.collectAsState()
+        var requiredNeed by remember { mutableStateOf<AnalysisNeed?>(null) }
+        var background by remember { mutableStateOf(false) }
+
+        fun startAnalysis() {
+            background = false
+            context.startForegroundService(Intent(context, AnalysisService::class.java))
+        }
+
+        val requestNotifications = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { startAnalysis() }
+
+        LaunchedEffect(enabled, revision) {
+            requiredNeed =
+                if (enabled && AnalysisController.state.value !is AnalysisState.Running) {
+                    HealthIdAnalysis.analysisNeed(context)
+                } else {
+                    null
+                }
+        }
+
+        val aborted = state is AnalysisState.Cancelled || state is AnalysisState.Failed
+        LaunchedEffect(aborted) {
+            if (!aborted) return@LaunchedEffect
+            onRevert()
+            if (state is AnalysisState.Cancelled) AnalysisController.consume()
+        }
+
+        requiredNeed?.let { reason ->
+            AnalysisRequiredDialog(
+                reason = reason,
+                onCancel = {
+                    requiredNeed = null
+                    onRevert()
+                },
+                onConfirm = {
+                    requiredNeed = null
+                    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                        == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        startAnalysis()
+                    } else {
+                        requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
             )
         }
-        var hideIconEnabled by remember { mutableStateOf(getHideIconState()) }
-        var verboseExportEnabled by remember {
-            mutableStateOf(
-                runCatching { prefs(PREFS_NAME).get(DebugPrefs.VERBOSE_EXPORT) }.getOrDefault(false)
+
+        when (val current = state) {
+            is AnalysisState.Running -> if (!background) AnalysisProgressDialog(
+                state = current,
+                onBackground = { background = true },
+                onCancel = AnalysisController::cancel
             )
+
+            is AnalysisState.Succeeded -> AnalysisResultDialog(
+                success = true,
+                title = stringResource(R.string.analysis_result_success_title),
+                message = stringResource(
+                    R.string.analysis_result_success_message,
+                    current.names,
+                    current.elapsedMs / 1000
+                ),
+                onDismiss = AnalysisController::consume
+            )
+
+            is AnalysisState.Failed -> AnalysisResultDialog(
+                success = false,
+                title = stringResource(R.string.analysis_result_failed_title),
+                message = current.reason,
+                onDismiss = AnalysisController::consume
+            )
+
+            else -> Unit
         }
-        var logLevel by remember { mutableStateOf(getLogLevel()) }
+    }
+
+    @Composable
+    private fun DebugSettingsSection(
+        hookEnabled: Map<HookFeature, Boolean>,
+        moduleActive: Boolean
+    ) {
+        val checked = remember {
+            mutableStateMapOf<DebugToggle, Boolean>().apply {
+                DebugToggle.entries.forEach { put(it, config.get(it.pref)) }
+            }
+        }
+        var logLevel by remember { mutableStateOf(LogLevel.of(config.get(DebugPrefs.LOG_LEVEL))) }
         var showDialog by remember { mutableStateOf(false) }
         var lastConfirmedAt by remember { mutableLongStateOf(0L) }
         var pendingToggle by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-        fun requireConfirmation(
-            onConfirmed: () -> Unit,
-            onToggleOff: () -> Unit,
-            enabled: Boolean
-        ) {
-            if (!enabled) {
-                onToggleOff()
-            } else if (System.currentTimeMillis() - lastConfirmedAt < 10 * 60 * 1000) {
-                onConfirmed()
-            } else {
-                pendingToggle = onConfirmed
+        fun requireConfirmation(enabled: Boolean, apply: (Boolean) -> Unit) = when {
+            !enabled -> apply(false)
+            System.currentTimeMillis() - lastConfirmedAt < CONFIRM_WINDOW_MS -> apply(true)
+            else -> {
+                pendingToggle = { apply(true) }
                 showDialog = true
             }
         }
 
-        val items = listOf(
-            SwitchItem(
-                icon = Icons.Outlined.BugReport,
-                title = stringResource(R.string.debug_red_dot_title),
-                subtitle = stringResource(R.string.debug_red_dot_subtitle),
-                isChecked = redDotEnabled,
-                onCheckedChange = { enabled ->
-                    requireConfirmation(
-                        onConfirmed = {
-                            redDotEnabled = true
-                            runCatching { prefs(PREFS_NAME).edit { put(DebugPrefs.RED_DOT, true) } }
-                        },
-                        onToggleOff = {
-                            redDotEnabled = false
-                            runCatching {
-                                prefs(PREFS_NAME).edit {
-                                    put(
-                                        DebugPrefs.RED_DOT,
-                                        false
-                                    )
-                                }
-                            }
-                        },
-                        enabled = enabled
+        fun apply(toggle: DebugToggle, value: Boolean) {
+            val applied = when (toggle) {
+                DebugToggle.HIDE_LAUNCHER_ICON -> runCatching {
+                    packageManager.setComponentEnabledSetting(
+                        ComponentName(this, "$packageName.Home"),
+                        if (value) PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                        else PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP
                     )
-                }
-            ),
+                }.onFailure {
+                    log.error(it) { "Launcher icon toggle failed" }
+                    Toast.makeText(this, R.string.setting_apply_failed, Toast.LENGTH_LONG).show()
+                }.isSuccess
+
+                else -> true
+            }
+            if (!applied) return
+            config.edit { put(toggle.pref, value) }
+            checked[toggle] = value
+        }
+
+        val items = DebugToggle.entries.map { toggle ->
+            val (icon, title, subtitle) = toggle.presentation()
+            // Stored value is kept while locked, matching Preference.setDependency; the
+            // hook side re-checks the same gate, so a stale `true` stays inert.
+            val lockedBy = toggle.requiredBy.takeUnless {
+                toggle.isUnlocked { feature -> hookEnabled[feature] != false }
+            }
+            val isHostSide = toggle != DebugToggle.HIDE_LAUNCHER_ICON
             SwitchItem(
-                icon = Icons.Outlined.VisibilityOff,
-                title = stringResource(R.string.debug_hide_icon_title),
-                subtitle = stringResource(R.string.debug_hide_icon_subtitle),
-                isChecked = hideIconEnabled,
+                icon = icon,
+                title = stringResource(title),
+                subtitle = lockedBy?.map { stringResource(it.presentation().second) }
+                    ?.joinToString()
+                    ?.let { stringResource(R.string.debug_requires_hook, it) }
+                    ?: stringResource(subtitle),
+                isChecked = checked.getValue(toggle),
+                enabled = lockedBy == null && (moduleActive || !isHostSide),
                 onCheckedChange = { enabled ->
-                    requireConfirmation(
-                        onConfirmed = {
-                            hideIconEnabled = true
-                            saveHideIconState(true)
-                        },
-                        onToggleOff = {
-                            hideIconEnabled = false
-                            saveHideIconState(false)
-                        },
-                        enabled = enabled
-                    )
-                }
-            ),
-            SwitchItem(
-                icon = Icons.Outlined.DataObject,
-                title = stringResource(R.string.debug_verbose_export_title),
-                subtitle = stringResource(R.string.debug_verbose_export_subtitle),
-                isChecked = verboseExportEnabled,
-                onCheckedChange = { enabled ->
-                    requireConfirmation(
-                        onConfirmed = {
-                            verboseExportEnabled = true
-                            saveVerboseExport(true)
-                        },
-                        onToggleOff = {
-                            verboseExportEnabled = false
-                            saveVerboseExport(false)
-                        },
-                        enabled = enabled
-                    )
+                    requireConfirmation(enabled) { apply(toggle, it) }
                 }
             )
-        )
+        }
 
         SwitchGroup(
             title = stringResource(R.string.debug_settings_title),
@@ -308,9 +464,11 @@ class MainActivity : ComponentActivity() {
             extraContent = {
                 LogLevelRow(
                     current = logLevel,
+                    enabled = moduleActive,
                     onSelect = { level ->
+                        config.edit { put(DebugPrefs.LOG_LEVEL, level.name) }
                         logLevel = level
-                        saveLogLevel(level)
+                        HLog.globalMinLevel = level
                     }
                 )
             }
@@ -334,8 +492,9 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun LogLevelRow(
-        current: HLog.Level,
-        onSelect: (HLog.Level) -> Unit
+        current: LogLevel,
+        enabled: Boolean,
+        onSelect: (LogLevel) -> Unit
     ) {
         var expanded by remember { mutableStateOf(false) }
 
@@ -343,7 +502,8 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier
                 .fillMaxSize()
                 .heightIn(min = Dimensions.ListItem.M)
-                .clickable { expanded = true }
+                .alpha(if (enabled) 1f else 0.38f)
+                .clickable(enabled = enabled) { expanded = true }
                 .padding(Dimensions.SpaceXL),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -401,7 +561,7 @@ class MainActivity : ComponentActivity() {
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
-                    HLog.Level.entries.forEach { level ->
+                    LogLevel.entries.forEach { level ->
                         DropdownMenuItem(
                             text = { Text(level.name) },
                             onClick = {
@@ -424,7 +584,7 @@ class MainActivity : ComponentActivity() {
 
         LaunchedEffect(Unit) {
             while (countdown > 0) {
-                delay(1000)
+                delay(1000.milliseconds)
                 countdown--
             }
         }
@@ -452,37 +612,6 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    private fun getHookEnabled(key: String): Boolean =
-        runCatching { prefs(PREFS_NAME).getBoolean(key, true) }.getOrDefault(true)
-
-    private fun saveHookEnabled(key: String, enabled: Boolean) {
-        runCatching { prefs(PREFS_NAME).edit { putBoolean(key, enabled) } }
-    }
-
-    private fun getHideIconState(): Boolean =
-        runCatching { prefs(PREFS_NAME).get(DebugPrefs.HIDE_LAUNCHER_ICON, false) }.getOrDefault(
-            false
-        )
-
-    private fun saveHideIconState(hide: Boolean) {
-        runCatching { prefs(PREFS_NAME).edit { put(DebugPrefs.HIDE_LAUNCHER_ICON, hide) } }
-        packageManager.setComponentEnabledSetting(
-            ComponentName(this, "$packageName.Home"),
-            if (!hide) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-            PackageManager.DONT_KILL_APP
-        )
-    }
-
-    private fun getLogLevel(): HLog.Level = runCatching {
-        HLog.Level.valueOf(prefs(PREFS_NAME).get(DebugPrefs.LOG_LEVEL))
-    }.getOrDefault(HLog.Level.DEBUG)
-
-    private fun saveLogLevel(level: HLog.Level) {
-        runCatching { prefs(PREFS_NAME).edit { put(DebugPrefs.LOG_LEVEL, level.name) } }
-    }
-
-    private fun saveVerboseExport(enabled: Boolean) {
-        runCatching { prefs(PREFS_NAME).edit { put(DebugPrefs.VERBOSE_EXPORT, enabled) } }
-    }
+    private fun saveHookEnabled(key: String, enabled: Boolean) =
+        config.edit { putBoolean(key, enabled) }
 }

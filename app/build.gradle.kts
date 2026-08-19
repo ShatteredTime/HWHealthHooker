@@ -1,22 +1,33 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
+
+val gitCommit = runCatching {
+    fun git(vararg args: String) = providers.exec {
+        workingDir = rootDir
+        commandLine("git", *args)
+    }.standardOutput.asText.get()
+
+    val hash = git("rev-parse", "HEAD").trim().take(12)
+    require(hash.length == 12)
+    val dirty = git("--no-optional-locks", "status", "-uno", "--porcelain").isNotBlank()
+    if (dirty) "$hash-dirty" else hash
+}.getOrNull() ?: "unknown"
 
 android {
     namespace = "moe.evil.hwhh"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "moe.evil.hwhh"
         minSdk = 36
-        targetSdk = 36
         versionCode = 5
         versionName = "5"
+        buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
         ndk {
+            //noinspection ChromeOsAbiSupport
             abiFilters += "arm64-v8a"
         }
     }
@@ -37,19 +48,26 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlin {
-        compileOptions {
-            jvmToolchain(21)
-        }
-    }
-
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    androidResources {
+        additionalParameters += listOf("--package-id", "0x64", "--allow-reserved-package-id")
     }
 }
 
+kotlin {
+    jvmToolchain(21)
+}
+
 dependencies {
-    implementation(project(":xposed"))
+    implementation(project(":shared"))
+    runtimeOnly(project(":xposed"))
+    implementation(project(":analyzer"))
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

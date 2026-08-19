@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Health data export dialog -->
+    <string name="hwhh_export_title">生理数据导出</string>
+    <string name="hwhh_loading_types">正在读取可导出的数据类型…</string>
+    <string name="hwhh_no_types">未发现本机可读取的生理数据类型</string>
+    <string name="hwhh_types_unavailable_title">类型枚举失败</string>
+    <string name="hwhh_types_unavailable">无法枚举本机生理数据类型，详见日志</string>
+    <string name="hwhh_metadata_degraded">ID 名称解析不可用，仅显示原始 ID（详见日志）</string>
+    <string name="hwhh_dialog_unavailable">宿主对话框不可用（解析失败），详见日志</string>
+    <string name="hwhh_metadata_unavailable_title">元数据不可用</string>
+    <string name="hwhh_metadata_unavailable_message">出现错误：\n\n%1$s\n\n是否不携带元数据解析？</string>
+    <string name="hwhh_row_time">选择时间</string>
+    <string name="hwhh_row_id">ID 范围</string>
+    <string name="hwhh_id_summary">%1$d / %2$d 项</string>
+    <string name="hwhh_select_all">全选 / 全不选</string>
+    <string name="hwhh_no_type_selected">未选择任何类型，已取消导出</string>
+    <string name="hwhh_exporting">正在导出…</string>
+    <string name="hwhh_export_failed">导出失败：%1$s</string>
+    <string name="hwhh_export_failed_title">导出失败</string>
+    <!-- Single activity FIT export -->
+    <string name="hwhh_export_fit">导出 FIT</string>
+    <string name="hwhh_export_dir_failed">导出目录创建失败</string>
+    <string name="hwhh_record_export_unsupported_title">暂不支持导出 FIT</string>
+    <string name="hwhh_record_export_unsupported">仅导出 JSON —— 运动类型 %1$d 暂不支持 FIT。\n%2$s</string>
+    <string name="hwhh_record_export_fit_failed_title">FIT 导出失败</string>
+    <string name="hwhh_record_export_fit_failed">JSON 已导出，FIT 失败：%1$s\n%2$s</string>
+    <!-- Batch activity export -->
+    <string name="hwhh_batch_export">批量导出</string>
+    <string name="hwhh_batch_preparing">正在准备批量导出…</string>
+    <string name="hwhh_batch_done_title">批量导出完成</string>
+    <string name="hwhh_batch_done">成功 %1$d，无 GPS %2$d，失败 %3$d（共 %4$d）\n\n%5$s</string>
+    <string name="hwhh_batch_failed_title">批量导出失败</string>
+    <string name="hwhh_batch_failed">批量导出失败：%1$s</string>
+    <!-- Sharing -->
+    <string name="hwhh_share_title">分享导出结果</string>
+    <string name="hwhh_share_zipping">正在打包…</string>
+    <string name="hwhh_share_failed_title">分享失败</string>
+    <string name="hwhh_share_failed">分享失败：%1$s</string>
+    <!-- Shared actions -->
+    <string name="hwhh_error_detail">出现错误：\n\n%1$s</string>
+    <string name="hwhh_ok">确定</string>
+    <string name="hwhh_cancel">取消</string>
+    <string name="hwhh_yes">是</string>
+    <string name="hwhh_no">否</string>
+    <string name="hwhh_export">导出</string>
+</resources>

@@ -15,6 +15,7 @@ object Dimensions {
         val S = 16.dp
         val M = 24.dp
         val L = 32.dp
+        val XL = 48.dp
     }
 
     object Divider {
@@ -23,5 +24,9 @@ object Dimensions {
 
     object ListItem {
         val M = 56.dp
+    }
+
+    object LogPane {
+        val M = 168.dp
     }
 }

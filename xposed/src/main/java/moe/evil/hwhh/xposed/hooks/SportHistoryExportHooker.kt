@@ -1,174 +1,50 @@
 package moe.evil.hwhh.xposed.hooks
 
 import android.app.Activity
-import android.content.Context
 import android.os.Bundle
 import android.view.View
-import com.highcapable.kavaref.KavaRef.Companion.resolve
-import com.highcapable.kavaref.resolver.MethodResolver
-import com.huawei.hihealth.HiHealthData
-import com.huawei.hwbasemgr.IBaseResponseCallback
-import com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify
+import com.highcapable.kavaref.extension.classOf
 import com.huawei.ui.commonui.titlebar.CustomTitleBar
-import moe.evil.hwhh.xposed.HOOK_TARGET_PACKAGE
-import moe.evil.hwhh.xposed.exporter.SportHistoryExporter
-import moe.evil.hwhh.xposed.exporter.ensureExportDir
-import moe.evil.hwhh.xposed.utils.DexKitHooker
-import moe.evil.hwhh.xposed.utils.HLog
+import moe.evil.hwhh.kdxref.HostBridge
+import moe.evil.hwhh.kdxref.describe
+import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
+import moe.evil.hwhh.kdxref.safeHook
+import moe.evil.hwhh.kdxref.toClassOrLog
+import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
+import moe.evil.hwhh.shared.HookRoot
+import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.xposed.R
+import moe.evil.hwhh.xposed.sportdata.exporter.SportHistoryExporter
+import moe.evil.hwhh.xposed.sportdata.exporter.ensureExportDir
+import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
+import moe.evil.hwhh.xposed.utils.ShareExporter
+import moe.evil.hwhh.xposed.utils.ShareOutcome
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
-import moe.evil.hwhh.xposed.utils.firstMethodOrNullLogged
-import moe.evil.hwhh.xposed.utils.safeHook
-import moe.evil.hwhh.xposed.utils.toClassOrLog
+import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
-import moe.evil.hwhh.xposed.utils.tryHookWithDexKit
-import org.luckypray.dexkit.DexKitBridge
-import java.lang.reflect.Modifier
+import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-object SportHistoryExportHooker : DexKitHooker() {
+@HookRoot(order = 4)
+object SportHistoryExportHooker : DexKitBaseHooker() {
     private const val TITLE_BAR_ID = "sport_history_titlebar"
     private const val YEARS_BACK = 20L
     private const val MS_PER_YEAR = 365L * 24 * 3600 * 1000
-
     private val log = HLog.of<SportHistoryExportHooker>()
+    private val commonUi by require { CommonUIHooker }
+    private val history by require { SportHistoryHooker }
 
-    private var exporter: SportHistoryExporter? = null
-
-    override fun onHook() = tryHookWithDexKit { bridge ->
+    override fun onHookWithDexKit(bridge: HostBridge) {
         val activityClazz = context(this@SportHistoryExportHooker) {
             "com.huawei.ui.main.stories.history.SportHistoryActivity".toClassOrLog()
-        } ?: return@tryHookWithDexKit
-
-        val summaryMethod = resolveStaticMethod(
-            bridge = bridge,
-            label = "summary (bnf#b)",
-            paramTypes = listOf("long", "long", "com.huawei.hwbasemgr.IBaseResponseCallback"),
-            returnType = "void",
-            markerStrings = listOf("getRecordListByTime workoutList.size"),
-            kavaParams = arrayOf(
-                Long::class,
-                Long::class,
-                IBaseResponseCallback::class.java,
-            ),
-        ) ?: run {
-            log.warn { "Summary method not resolved" }
-            return@tryHookWithDexKit
-        }
-
-        val detailMarkerInners = bridge.findClass {
-            matcher {
-                usingStrings = listOf("requestTrackDetailData onResult map is empty.")
-            }
-        }.filter { it.name.contains('$') }
-        log.debug { "Detail (jac#c): marker inner classes=${detailMarkerInners.map { it.name }}" }
-
-        fun findDetailBuilder(innerName: String, requireReadHiHealthData: Boolean) =
-            bridge.findMethod {
-                matcher {
-                    declaredClass = innerName.substringBeforeLast('$')
-                    paramTypes("long", "long", "com.huawei.hwbasemgr.IBaseResponseCallback")
-                    returnType = "void"
-                    addInvoke {
-                        name = "<init>"
-                        declaredClass = innerName
-                    }
-                    if (requireReadHiHealthData) addInvoke { name = "readHiHealthData" }
-                }
-            }.singleOrNull { Modifier.isStatic(it.modifiers) }
-        val detailMd = detailMarkerInners.firstNotNullOfOrNull { findDetailBuilder(it.name, true) }
-            ?: detailMarkerInners.singleOrNull()?.name?.let { findDetailBuilder(it, false) }
-        log.debug { "Detail (jac#c): picked=${detailMd?.className}.${detailMd?.name}" }
-        val detailMethod = detailMd?.let { md ->
-            val cls = context(this@SportHistoryExportHooker) { md.className.toClassOrLog() }
-            cls?.resolve()?.optional(silent = true)?.firstMethodOrNull {
-                name = md.name
-                parameters(
-                    Long::class,
-                    Long::class,
-                    IBaseResponseCallback::class.java,
-                )
-            }
-        } ?: run {
-            log.warn { "Detail method not resolved" }
-            return@tryHookWithDexKit
-        }
-
-        val mrcMethod = resolveStaticMethod(
-            bridge = bridge,
-            label = "mrc.m128921e",
-            paramTypes = listOf(
-                "com.huawei.hihealth.HiHealthData",
-                "com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify",
-            ),
-            returnType = "java.lang.String",
-            markerStrings = listOf(
-                "should not enter this branch,do not set",
-                "Track_SportDataConvertUtil",
-            ),
-            kavaParams = arrayOf(HiHealthData::class.java, MotionPathSimplify::class.java),
-        ) ?: run {
-            log.warn { "mrc.m128921e not resolved" }
-            return@tryHookWithDexKit
-        }
-
-        val ifhMethod = resolveStaticMethod(
-            bridge = bridge,
-            label = "ifh.m108033a",
-            paramTypes = listOf("android.content.Context", "java.lang.String", "int"),
-            returnType = "com.huawei.hwfoundationmodel.trackmodel.MotionPath",
-            markerStrings = listOf("readTemporaryMotionPath savePath is empty"),
-            kavaParams = arrayOf(
-                Context::class.java,
-                String::class.java,
-                Int::class,
-            ),
-        ) ?: run {
-            log.warn { "ifh.m108033a not resolved" }
-            return@tryHookWithDexKit
-        }
+        } ?: return
 
         activityClazz.firstMethodOrNullLogged {
             name = "onCreate"
-            parameters(Bundle::class)
+            parameters(classOf<Bundle>())
         }?.safeHook {
-            after {
-                val activity = instanceOrNull as? Activity ?: return@after
-                if (exporter == null) {
-                    exporter = SportHistoryExporter(
-                        summaryMethod = summaryMethod,
-                        detailMethod = detailMethod,
-                        mrcConvertMethod = mrcMethod,
-                        ifhReadMethod = ifhMethod,
-                    )
-                }
-                addExportButton(activity)
-            }
-        }
-    }
-
-    private fun resolveStaticMethod(
-        bridge: DexKitBridge,
-        label: String,
-        paramTypes: List<String>,
-        returnType: String,
-        markerStrings: List<String>,
-        kavaParams: Array<out Any>,
-    ): MethodResolver<*>? {
-        val matches = bridge.findMethod {
-            matcher {
-                paramTypes(*paramTypes.toTypedArray())
-                this.returnType = returnType
-                usingStrings = markerStrings
-            }
-        }
-        val md = matches.singleOrNull { Modifier.isStatic(it.modifiers) }
-        log.debug { "$label: ${matches.size} match(es), picked=${md?.className}.${md?.name}" }
-        if (md == null) return null
-        val cls = context(this@SportHistoryExportHooker) { md.className.toClassOrLog() }
-            ?: return null
-        return cls.resolve().optional(silent = true).firstMethodOrNull {
-            name = md.name
-            parameters(*kavaParams)
+            after { (instanceOrNull as? Activity)?.let(::addExportButton) }
         }
     }
 
@@ -179,7 +55,7 @@ object SportHistoryExportHooker : DexKitHooker() {
             return
         }
         val titleBar = activity.findViewById<CustomTitleBar>(titleBarId) ?: run {
-            log.warn { "'$TITLE_BAR_ID' view not in layout of ${activity.javaClass.simpleName} (id=$titleBarId)" }
+            log.warn { "View '$TITLE_BAR_ID' not in layout of ${activity.javaClass.simpleName} (id=$titleBarId)" }
             return
         }
         val icon = runCatching {
@@ -188,44 +64,96 @@ object SportHistoryExportHooker : DexKitHooker() {
         }.getOrNull() ?: runCatching {
             activity.getDrawable(android.R.drawable.stat_sys_upload_done)
         }.getOrNull()
-        titleBar.setRightThirdKeyBackground(icon, "Batch Export")
+        titleBar.setRightThirdKeyBackground(icon, activity.moduleString(R.string.hwhh_batch_export))
         titleBar.setRightThirdKeyVisibility(View.VISIBLE)
         titleBar.setRightThirdKeyOnClickListener { onExportClicked(activity) }
         log.debug { "Batch export button added to SportHistoryActivity" }
     }
 
     private fun onExportClicked(activity: Activity) {
-        val b = exporter ?: run {
-            activity.toast("Batch export unavailable (lookups failed)")
-            return
-        }
-        activity.toast("Batch exporting activities...")
+        val cancelled = AtomicBoolean(false)
+        val progress = commonUi.createProgressDialog(
+            activity,
+            activity.moduleString(R.string.hwhh_batch_preparing),
+        ) { cancelled.set(true) }.gracefulShow()
         thread {
             runCatching {
                 val dir = activity.applicationContext.ensureExportDir() ?: run {
-                    activity.toast("Failed to create export directory")
-                    return@thread
+                    commonUi.createNoTitleCustomAlertDialog(
+                        activity = activity,
+                        message = activity.moduleString(R.string.hwhh_export_dir_failed),
+                        positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                    ).gracefulShow {
+                        toast(moduleString(R.string.hwhh_export_dir_failed))
+                    }
+                    return@runCatching
                 }
+                val runDir = File(dir, "batch_${System.currentTimeMillis()}").apply { mkdirs() }
                 val now = System.currentTimeMillis()
                 val start = now - YEARS_BACK * MS_PER_YEAR
                 log.debug { "Querying range start=$start end=$now" }
-                val result = b.exportSupported(
+                val result = SportHistoryExporter.exportSupported(
+                    history,
                     activity.applicationContext,
-                    dir,
+                    runDir,
                     start,
-                    now
+                    now,
+                    isCancelled = cancelled::get,
                 ) { done, total ->
-                    if (done == 1 || done % 10 == 0 || done == total) {
-                        activity.toast("$done / $total")
+                    progress.setProgress(done * 100 / total)
+                    progress.setMessage("$done / $total")
+                }
+                val statsMessage = activity.moduleString(
+                    R.string.hwhh_batch_done,
+                    result.exported,
+                    result.missingSequence,
+                    result.failed,
+                    result.candidates,
+                    runDir.absolutePath,
+                )
+                val shareOutcome = if (cancelled.get() || result.exported == 0) null else {
+                    cancelled.set(false)
+                    progress.setMessage(activity.moduleString(R.string.hwhh_share_zipping))
+                    ShareExporter.share(
+                        activity = activity,
+                        target = runDir,
+                        chooserTitle = activity.moduleString(R.string.hwhh_share_title),
+                        isCancelled = cancelled::get,
+                    ) { done, total ->
+                        progress.setProgress(done * 100 / total)
+                        progress.setMessage("$done / $total")
                     }
                 }
-                activity.toast(
-                    "Batch done: ${result.exported} ok, ${result.missingSequence} no-GPS, ${result.failed} failed (total ${result.candidates})\n${dir.absolutePath}",
-                )
+                if (shareOutcome is ShareOutcome.Failed) {
+                    val cause = shareOutcome.error.describe()
+                    commonUi.createCustomTextAlertDialog(
+                        activity = activity,
+                        title = activity.moduleString(R.string.hwhh_share_failed_title),
+                        message = activity.moduleString(R.string.hwhh_error_detail, cause),
+                        positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                    ).gracefulShow {
+                        toast(moduleString(R.string.hwhh_share_failed, cause))
+                    }
+                    return@runCatching
+                }
+                commonUi.createCustomTextAlertDialog(
+                    activity = activity,
+                    title = activity.moduleString(R.string.hwhh_batch_done_title),
+                    message = statsMessage,
+                    positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                ).gracefulShow { toast(statsMessage) }
             }.onFailure { e ->
                 log.error(e) { "Batch export failed" }
-                activity.toast("Batch failed: ${e.message}")
+                commonUi.createCustomTextAlertDialog(
+                    activity = activity,
+                    title = activity.moduleString(R.string.hwhh_batch_failed_title),
+                    message = activity.moduleString(R.string.hwhh_error_detail, e.describe()),
+                    positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                ).gracefulShow {
+                    toast(moduleString(R.string.hwhh_batch_failed, e.describe()))
+                }
             }
+            progress.dismiss()
         }
     }
 }

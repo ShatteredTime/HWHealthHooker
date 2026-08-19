@@ -1,6 +1,7 @@
 package moe.evil.hwhh.ui.widget
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -33,7 +34,9 @@ data class SwitchItem(
     val title: String,
     val subtitle: String = "",
     val isChecked: Boolean,
-    val onCheckedChange: (Boolean) -> Unit
+    val enabled: Boolean = true,
+    val onCheckedChange: (Boolean) -> Unit,
+    val onLongClick: (() -> Unit)? = null
 )
 
 @Composable
@@ -84,14 +87,19 @@ private fun SettingsDivider() {
 
 @Composable
 private fun SettingsSwitchRow(item: SwitchItem) {
+    // The Switch brings its own disabled colors, so only the icon and the labels
+    // get the MD3 38% treatment; dimming the whole row would stack the two.
+    val contentAlpha = if (item.enabled) 1f else 0.38f
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = Dimensions.ListItem.M)
-            .toggleable(
-                value = item.isChecked,
-                onValueChange = { item.onCheckedChange(it) },
-                role = Role.Switch
+            .combinedClickable(
+                enabled = item.enabled,
+                role = Role.Switch,
+                onLongClick = item.onLongClick,
+                onClick = { item.onCheckedChange(!item.isChecked) }
             )
             .padding(Dimensions.SpaceXL),
         verticalAlignment = Alignment.CenterVertically
@@ -100,6 +108,7 @@ private fun SettingsSwitchRow(item: SwitchItem) {
         Box(
             modifier = Modifier
                 .size(Dimensions.IconSize.L + Dimensions.SpaceXS)
+                .alpha(contentAlpha)
                 .background(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                     shape = MaterialTheme.shapes.small
@@ -117,7 +126,11 @@ private fun SettingsSwitchRow(item: SwitchItem) {
         Spacer(modifier = Modifier.width(Dimensions.SpaceL))
 
         // Center title + subtitle
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .alpha(contentAlpha)
+        ) {
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.bodyLarge,
@@ -139,6 +152,7 @@ private fun SettingsSwitchRow(item: SwitchItem) {
         // Right switch
         Switch(
             checked = item.isChecked,
+            enabled = item.enabled,
             onCheckedChange = { item.onCheckedChange(it) }
         )
     }

@@ -10,4 +10,5 @@ class MotionPath {
     fun requestSpeedList(): List<TimeSequence>? = stub()
 }
 
-private fun stub(): Nothing = throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")
+private fun stub(): Nothing =
+    throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")

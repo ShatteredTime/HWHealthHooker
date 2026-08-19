@@ -48,13 +48,13 @@ data class SportRecord(
     @Serializable
     data class TimedFloat(val timeMs: Long, val value: Float)
 
-    val isGcj02: Boolean get() = coordinate == "GCJ02"
+    val isGcj02 get() = coordinate == "GCJ02"
 
-    val huaweiSport: HuaweiSportType? get() = HuaweiSportType.of(sportType)
+    val huaweiSport get() = HuaweiSportType.of(sportType)
 
-    val totalDistanceMeters: Float
+    val totalDistanceMeters
         get() = totalDistanceMm.toFloat()
 
-    val totalCaloriesKcal: Int
+    val totalCaloriesKcal
         get() = if (totalCaloriesRaw > 10000) totalCaloriesRaw / 1000 else totalCaloriesRaw
 }

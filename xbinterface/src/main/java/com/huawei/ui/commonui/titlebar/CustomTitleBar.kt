@@ -5,6 +5,7 @@ package com.huawei.ui.commonui.titlebar
 import android.content.Context
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
+import android.view.View
 import android.widget.RelativeLayout
 
 class CustomTitleBar : RelativeLayout {
@@ -14,6 +15,12 @@ class CustomTitleBar : RelativeLayout {
     fun setRightThirdKeyBackground(drawable: Drawable?, description: CharSequence): Unit = stub()
     fun setRightThirdKeyVisibility(visibility: Int): Unit = stub()
     fun setRightThirdKeyOnClickListener(listener: OnClickListener): Unit = stub()
+    fun getRightThirdKey(): View? = stub()
+    fun setRightSoftkeyBackground(drawable: Drawable?, description: CharSequence): Unit = stub()
+    fun setRightSoftkeyVisibility(visibility: Int): Unit = stub()
+    fun setRightSoftkeyOnClickListener(listener: OnClickListener): Unit = stub()
+    fun getRightSoftKey(): View? = stub()
 }
 
-private fun stub(): Nothing = throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")
+private fun stub(): Nothing =
+    throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")

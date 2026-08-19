@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">HWHealthHooker</string>
+    <string name="app_name" translatable="false">HWHealthHooker</string>
     <string name="module_active_title">Module Activated</string>
     <string name="module_active_subtitle">HWHealthHooker module is working normally</string>
     <string name="module_inactive_title">Module Not Activated</string>
@@ -15,7 +15,10 @@
     <string name="hook_sport_data_export_subtitle">Export current workout as FIT/JSON</string>
     <string name="hook_sport_history_export_title">Workout History Export</string>
     <string name="hook_sport_history_export_subtitle">Batch export Activity Log</string>
+    <string name="hook_health_export_title">Health Data Export</string>
+    <string name="hook_health_export_subtitle">Export raw health metrics as JSON (Long-press to clear ID resolution cache)</string>
     <string name="debug_settings_title">Debug Settings</string>
+    <string name="debug_build_badge" translatable="false">DEBUG</string>
     <string name="debug_red_dot_title">Profile Red Dot Debug</string>
     <string name="debug_red_dot_subtitle">Output profile red dot message source</string>
     <string name="debug_confirm_title">Warning</string>
@@ -29,4 +32,57 @@
     <string name="debug_log_level_subtitle">Minimum level emitted to logcat (applied on next target restart)</string>
     <string name="debug_verbose_export_title">Verbose Export</string>
     <string name="debug_verbose_export_subtitle">Emit inspect JSON alongside .fit</string>
+    <string name="debug_health_query_title">Health Query Debug</string>
+    <string name="debug_health_query_subtitle">Let root users query health data over broadcast</string>
+    <string name="debug_requires_hook">Requires \"%1$s\" to be enabled</string>
+    <string name="analysis_required_title">Analysis Required</string>
+    <string name="analysis_required_message">Analyzed metadata missing for build tag %1$s. Health data export needs it. Analyze now?</string>
+    <string name="analysis_required_stale_title">Analysis Outdated</string>
+    <string name="analysis_required_stale_message">Analyzed metadata is for build tag %1$s, host is now %2$s. Health data export needs a fresh result. Analyze now?</string>
+    <string name="analysis_required_cancel">Cancel</string>
+    <string name="analysis_required_confirm">Analyze</string>
+    <string name="analysis_progress_title">Analyzing Huawei Health</string>
+    <string name="analysis_progress_percent">%1$d%%</string>
+    <string name="analysis_progress_cancelling">Cancelling…</string>
+    <string name="analysis_progress_cancel">Cancel</string>
+    <string name="analysis_progress_background">Background</string>
+    <string name="analysis_result_ok">OK</string>
+    <string name="analysis_result_success_title">Analysis Complete</string>
+    <string name="analysis_result_success_message">Resolved %1$d ID names in %2$ds.</string>
+    <string name="analysis_result_failed_title">Analysis Failed</string>
+    <string name="analysis_channel_name">ID name analysis</string>
+    <string name="analysis_notification_title">Heuristically resolving IDName</string>
+    <string name="analysis_notification_preparing">Preparing…</string>
+    <string name="analysis_notification_cancelling">Cancelling…</string>
+    <string name="analysis_notification_done">Analysis complete</string>
+    <string name="analysis_notification_failed">Analysis failed</string>
+    <string name="analysis_clear_title">Clear Analysis Cache</string>
+    <string name="analysis_clear_message">Delete the cached ID name analysis result?</string>
+    <string name="analysis_clear_cancel">No</string>
+    <string name="analysis_clear_confirm">Yes</string>
+    <string name="analysis_clear_done">Cached analysis result cleared</string>
+    <string name="setting_apply_failed">Could not apply this setting</string>
+    <string name="about_version" translatable="false">%1$s (%2$s)</string>
+    <string name="about_source_url" translatable="false">https://github.com/SingerBallad/HWHealthHooker</string>
+    <string name="about_source_label" translatable="false">GitHub</string>
+    <string name="about_view_source">View source code at %1$s</string>
+    <string name="easter_hint" translatable="false">Take it back...</string>
+    <string-array name="easter_lyrics" translatable="false">
+        <item>Her love rains down on me</item>
+        <item>It\'s easy as the breeze</item>
+        <item>I listen to her breathing</item>
+        <item>It sounds like the waves on the sea</item>
+        <item>I was thinkin\' all about her</item>
+        <item>Burning with rage and desire</item>
+        <item>We were spinning into darkness</item>
+        <item>And the earth was on fire</item>
+    </string-array>
+    <string name="easter_link_left" translatable="false">https://www.bilibili.com/video/BV1dP4y1T7TU</string>
+    <string name="easter_link_right" translatable="false">https://www.bilibili.com/video/BV1df421o7iy</string>
+    <string name="easter_bonus_left" translatable="false">She might take it back</string>
+    <string name="easter_bonus_right" translatable="false">She could take it back someday</string>
+    <string name="easter_link_backdrop" translatable="false">https://youtu.be/Y5rde4bRIZA</string>
+    <string name="easter_bonus_backdrop" translatable="false">Take it back?</string>
+    <string name="easter_link_speedrun" translatable="false">https://b23.tv/av640957</string>
+    <string name="easter_bonus_speedrun" translatable="false">悔しくて指を離す</string>
 </resources>

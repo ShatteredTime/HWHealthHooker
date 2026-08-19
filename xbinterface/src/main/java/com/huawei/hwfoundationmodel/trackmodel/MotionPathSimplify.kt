@@ -23,4 +23,5 @@ class MotionPathSimplify {
     fun requestSportData(): Map<String, Int>? = stub()
 }
 
-private fun stub(): Nothing = throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")
+private fun stub(): Nothing =
+    throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")

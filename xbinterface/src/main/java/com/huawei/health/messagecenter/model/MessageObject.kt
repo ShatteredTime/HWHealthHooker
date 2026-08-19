@@ -6,4 +6,5 @@ class MessageObject {
     val type: String? get() = stub()
 }
 
-private fun stub(): Nothing = throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")
+private fun stub(): Nothing =
+    throw NotImplementedError("xbinterface stub; HostClassLoaderBridge not installed")

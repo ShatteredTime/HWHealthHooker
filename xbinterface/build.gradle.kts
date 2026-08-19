@@ -2,12 +2,11 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "moe.evil.hwhh.xbinterface"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 36

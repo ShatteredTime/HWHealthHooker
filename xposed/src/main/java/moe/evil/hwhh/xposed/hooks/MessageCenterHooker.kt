@@ -1,83 +1,57 @@
 package moe.evil.hwhh.xposed.hooks
 
-import com.highcapable.kavaref.KavaRef.Companion.asResolver
+import com.highcapable.kavaref.extension.classOf
 import com.huawei.health.messagecenter.model.MessageObject
-import moe.evil.hwhh.xposed.utils.DexKitHooker
-import moe.evil.hwhh.xposed.utils.firstMethodOrNullLogged
-import moe.evil.hwhh.xposed.utils.safeHook
-import moe.evil.hwhh.xposed.utils.toClassOrLog
-import moe.evil.hwhh.xposed.utils.tryHookWithDexKit
+import moe.evil.hwhh.kdxref.HostBridge
+import moe.evil.hwhh.kdxref.hostField
+import moe.evil.hwhh.kdxref.hostMethod
+import moe.evil.hwhh.kdxref.safeHook
+import moe.evil.hwhh.kdxref.toClassOrLog
+import moe.evil.hwhh.shared.HookRoot
+import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import java.util.concurrent.CountDownLatch
 
-object MessageCenterHooker : DexKitHooker() {
+@HookRoot(order = 1)
+object MessageCenterHooker : DexKitBaseHooker() {
     private const val KAKA_MODULE = "17"
     private const val KAKA_MESSAGE_ID = "kakaMessage"
+    private const val ACTIVITY_PACKAGE = "com.huawei.pluginmessagecenter.activity"
+    private const val ADAPTER_PACKAGE = "com.huawei.pluginmessagecenter.adapter"
     private val KAKA_TYPES = setOf("unclaimedKaka", "kakaExpiration")
+    private val KAKA_MARKERS = listOf("kakaMessage", "unclaimedKaka")
 
-    override fun onHook() = tryHookWithDexKit { bridge ->
-        val messageCenterActivityClazz = context(this@MessageCenterHooker) {
+    override fun onHookWithDexKit(bridge: HostBridge) {
+        val mcaClassName = context(this@MessageCenterHooker) {
             "com.huawei.pluginmessagecenter.activity.MessageCenterActivity".toClassOrLog()
-        } ?: return@tryHookWithDexKit
-        val messageCenterListAdapterClazz = context(this@MessageCenterHooker) {
+        }?.name ?: return
+        val mclaClassName = context(this@MessageCenterHooker) {
             "com.huawei.pluginmessagecenter.adapter.MessageCenterListAdapter".toClassOrLog()
-        } ?: return@tryHookWithDexKit
-        val mcaClassName = messageCenterActivityClazz.name
-        val mclaClassName = messageCenterListAdapterClazz.name
+        }?.name ?: return
 
-        val buildKakaMethodName = bridge.findMethod {
-            searchPackages("com.huawei.pluginmessagecenter.activity")
-            matcher {
-                declaredClass = mcaClassName
-                usingStrings = listOf("kakaMessage", "unclaimedKaka")
-            }
-        }.single().name
-
-        val getMessageListMethodName = bridge.findMethod {
-            searchPackages("com.huawei.pluginmessagecenter.activity")
-            matcher {
-                declaredClass = mcaClassName
-                paramTypes("int", "java.util.concurrent.CountDownLatch")
-                usingStrings = listOf("handleMessageCenter reached")
-            }
-        }.single().name
-
-        val setListMethodName = bridge.findMethod {
-            searchPackages("com.huawei.pluginmessagecenter.adapter")
-            matcher {
-                declaredClass = mclaClassName
-                paramTypes("java.util.List")
-                returnType = "void"
-            }
-        }.single().name
-
-        val kakaFlagFieldName = bridge.findField {
-            searchPackages("com.huawei.pluginmessagecenter.activity")
-            matcher {
-                declaredClass = mcaClassName
-                type = "boolean"
-                addWriteMethod {
-                    usingStrings = listOf("kakaMessage", "unclaimedKaka")
-                }
-            }
-        }.single().name
+        val kakaFlag = hostField<Boolean>(
+            label = "MessageCenterActivity#kakaFlag",
+            inPackage = ACTIVITY_PACKAGE,
+        ) {
+            declaredClass = mcaClassName
+            addWriteMethod { usingStrings = KAKA_MARKERS }
+        } ?: return
 
         // suppress kaka message object creation (dexkit-resolved)
-        messageCenterActivityClazz.firstMethodOrNullLogged {
-            name = buildKakaMethodName
+        hostMethod<Any>("MessageCenterActivity#buildKaka", ACTIVITY_PACKAGE) {
+            declaredClass = mcaClassName
+            usingStrings = KAKA_MARKERS
         }?.safeHook {
             replaceAny {
-                instanceOrNull?.asResolver()?.optional(silent = true)?.firstFieldOrNull {
-                    name = kakaFlagFieldName
-                    type = Boolean::class
-                }?.setQuietly(false)
+                kakaFlag.set(instanceOrNull, false)
                 null
             }
         }
 
         // filter kaka messages from the assembled list (dexkit-resolved)
-        messageCenterActivityClazz.firstMethodOrNullLogged {
-            name = getMessageListMethodName
-            parameters(Int::class, CountDownLatch::class)
+        hostMethod<Any>("MessageCenterActivity#getMessageList", ACTIVITY_PACKAGE) {
+            declaredClass = mcaClassName
+            paramTypes(classOf<Int>(), classOf<CountDownLatch>())
+            usingStrings = listOf("handleMessageCenter reached")
         }?.safeHook {
             after {
                 result = filterKakaMessages(result)
@@ -85,9 +59,9 @@ object MessageCenterHooker : DexKitHooker() {
         }
 
         // filter kaka messages before adapter display (dexkit-resolved)
-        messageCenterListAdapterClazz.firstMethodOrNullLogged {
-            name = setListMethodName
-            parameters(List::class)
+        hostMethod<Unit>("MessageCenterListAdapter#setList", ADAPTER_PACKAGE) {
+            declaredClass = mclaClassName
+            paramTypes(classOf<List<*>>())
         }?.safeHook {
             before {
                 args(0).set(filterKakaMessages(args(0).any()))
@@ -100,6 +74,6 @@ object MessageCenterHooker : DexKitHooker() {
         return source.filterNotTo(mutableListOf()) { it is MessageObject && it.isKaka() }
     }
 
-    private fun MessageObject.isKaka(): Boolean =
+    private fun MessageObject.isKaka() =
         msgId == KAKA_MESSAGE_ID || module == KAKA_MODULE || type in KAKA_TYPES
 }
