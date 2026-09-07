@@ -71,9 +71,6 @@ internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
         val latch = CountDownLatch(1)
         var outcome: Result<List<*>> = Result.failure(IllegalStateException("No response: $label"))
         runCatching {
-            // Never a SAM lambda here: R8 turns those into a synthetic class no keep rule
-            // reaches, renames onResponse (the stub interface is compileOnly and thus
-            // invisible to it), and the host's callback dies on AbstractMethodError.
             invoke(null, startMs, endMs, object : IBaseResponseCallback {
                 override fun onResponse(errCode: Int, data: Any?) {
                     outcome = when {

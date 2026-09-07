@@ -37,11 +37,6 @@ fun Activity.dialogContent(vararg rows: View) = LinearLayout(this).apply {
     rows.forEach(::addView)
 }
 
-// Host stub interfaces must be implemented by a named class under the kept
-// moe.evil.hwhh.xposed package: a SAM lambda becomes an R8 synthetic that keep
-// rules cannot reach, and since the interface is compileOnly R8 renames the
-// override, so the host's call lands on AbstractMethodError in release builds.
-@Suppress("ObjectLiteralToLambda")
 fun dateSelected(onSelected: (Int, Int, Int) -> Unit) =
     object : HealthDatePickerDialog.DateSelectedListener {
         override fun onDateSelected(year: Int, month: Int, dayOfMonth: Int) =

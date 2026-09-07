@@ -3,6 +3,7 @@ package moe.evil.hwhh.xposed.resolvers
 import android.util.Xml
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.log.describe
+import moe.evil.hwhh.xposed.utils.Memo
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
 
@@ -11,16 +12,10 @@ object PluginStrings {
     private const val BASELINE = "lang/strings.xml"
 
     private val log = HLog.of<PluginStrings>()
+    private val cache = Memo<Map<String, String>>()
 
-    @Volatile
-    private var cache: Map<String, String>? = null
-
-    fun name(filesDir: File, key: String) = table(filesDir)[key]
-
-    private fun table(filesDir: File) =
-        cache ?: synchronized(this) {
-            cache ?: load(File(filesDir, REL_PATH)).also { cache = it }
-        }
+    fun name(filesDir: File, key: String) =
+        cache.orNull { load(File(filesDir, REL_PATH)) }?.get(key)
 
     private fun load(root: File) = buildMap {
         root.listFiles().orEmpty().forEach { dir ->

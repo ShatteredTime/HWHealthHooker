@@ -25,12 +25,10 @@ internal object HealthAliasHooker : MetaDataBaseHooker<HealthAliasApi>() {
             }
         }
 
-    override val providedApi = object : HealthAliasApi {
-        override val isMajor get() = this@HealthAliasHooker.isMajor
-        override val isAvailable get() = this@HealthAliasHooker.isAvailable
-        override val availabilityError get() = this@HealthAliasHooker.availabilityError
-        override val names get() = this@HealthAliasHooker.names
-    }
+    override val providedApi: HealthAliasApi =
+        object : HealthAliasApi, MetadataSourceApi by availability {
+            override val names get() = this@HealthAliasHooker.names
+        }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
         val option = classOf<HiDataReadOption>()

@@ -6,6 +6,7 @@ import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.HookApi
+import moe.evil.hwhh.xposed.utils.Memo
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 import moe.evil.hwhh.xposed.utils.wrapper.HostMethod
 import moe.evil.hwhh.xposed.utils.wrapper.HostMethodData
@@ -69,82 +70,68 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
 
     private lateinit var members: Members
 
-    @Volatile
-    private var tableCache: List<HiHealthTable>? = null
-
-    @Volatile
-    private var typeCache: List<Int>? = null
-
-    @Volatile
-    private var accountCache: HiHealthAccount? = null
+    private val tableCache = Memo<List<HiHealthTable>>()
+    private val typeCache = Memo<List<Int>>()
+    private val accountCache = Memo<HiHealthAccount>()
 
     private val databases = ConcurrentHashMap<String, SQLiteDatabase>()
 
     override val providedApi = object : HiHealthDbApi {
-        override fun account() = accountCache
-            ?: synchronized(this@HiHealthDbHooker) {
-                accountCache ?: members.account?.let { resolved ->
-                    val huid = resolved.huid()?.takeIf(String::isNotEmpty) ?: return@let null
-                    val userId = resolved.userId(huid)?.takeIf { it > 0 } ?: return@let null
-                    HiHealthAccount(userId, resolved.clientIds(userId))
-                }?.also { accountCache = it }
+        override fun account() = accountCache.orNull {
+            members.account?.let { resolved ->
+                val huid = resolved.huid()?.takeIf(String::isNotEmpty) ?: return@let null
+                val userId = resolved.userId(huid)?.takeIf { it > 0 } ?: return@let null
+                HiHealthAccount(userId, resolved.clientIds(userId))
             }
+        }
 
-        override fun tables() = tableCache?.let { Result.success(it) }
-            ?: synchronized(this@HiHealthDbHooker) {
-                tableCache?.let { Result.success(it) } ?: runCatching {
-                    buildList {
-                        val fingerprints = hashSetOf<Set<String>>()
-                        listOf(MAIN_DB, SENSITIVE_DB).forEach { db ->
-                            val rows = members.withCursor(
-                                db,
-                                "SELECT name, sql FROM sqlite_master WHERE type='table'",
-                            ) { cursor ->
-                                val nameAt = cursor.getColumnIndex("name")
-                                val sqlAt = cursor.getColumnIndex("sql")
-                                buildList {
-                                    while (cursor.moveToNext()) {
-                                        val name = cursor.getString(nameAt) ?: continue
-                                        val sql = cursor.getString(sqlAt) ?: continue
-                                        if (name != "android_metadata") add(name to sql)
-                                    }
-                                }
-                            } ?: run {
-                                check(db != MAIN_DB) { "Main db schema unreadable" }
-                                log.warn { "Skip $db, schema unreadable" }
-                                return@forEach
+        override fun tables() = tableCache.orCatching {
+            buildList {
+                val fingerprints = hashSetOf<Set<String>>()
+                listOf(MAIN_DB, SENSITIVE_DB).forEach { db ->
+                    val rows = members.withCursor(
+                        db,
+                        "SELECT name, sql FROM sqlite_master WHERE type='table'",
+                    ) { cursor ->
+                        val nameAt = cursor.getColumnIndex("name")
+                        val sqlAt = cursor.getColumnIndex("sql")
+                        buildList<Pair<String, String>> {
+                            while (cursor.moveToNext()) {
+                                val name = cursor.getString(nameAt) ?: continue
+                                val sql = cursor.getString(sqlAt) ?: continue
+                                if (name != "android_metadata") add(name to sql)
                             }
-                            if (rows.isEmpty()) return@forEach
-                            if (!fingerprints.add(rows.mapTo(hashSetOf()) { "${it.first} ${it.second}" })) {
-                                log.info { "Skip $db, schema identical to an already-read db" }
-                                return@forEach
-                            }
-                            rows.mapTo(this) { (name, sql) -> HiHealthTable(db, name, sql) }
                         }
+                    } ?: run {
+                        check(db != MAIN_DB) { "Main db schema unreadable" }
+                        log.warn { "Skip $db, schema unreadable" }
+                        return@forEach
                     }
-                }.onSuccess { tableCache = it }
+                    if (rows.isEmpty()) return@forEach
+                    if (!fingerprints.add(rows.mapTo(hashSetOf()) { "${it.first} ${it.second}" })) {
+                        log.info { "Skip $db, schema identical to an already-read db" }
+                        return@forEach
+                    }
+                    rows.mapTo(this) { (name, sql) -> HiHealthTable(db, name, sql) }
+                }
             }
+        }
 
-        override fun localTypes() = typeCache?.let { Result.success(it) }
-            ?: synchronized(this@HiHealthDbHooker) {
-                typeCache?.let { Result.success(it) } ?: runCatching {
-                    val account = checkNotNull(account()) { "Current account not resolved" }
-                    val out = sortedSetOf<Int>()
-                    tables().getOrThrow().forEach { table ->
-                        val column =
-                            table.typeColumn.takeIf { it in table.columns } ?: return@forEach
-                        val floor = if (column == STAT_TYPE) MIN_STAT_TYPE else 1
-                        distinctInts(table, column, account).getOrThrow()
-                            .filterTo(out) { it >= floor }
-                    }
-                    out.toList().also { log.info { "Local types=${it.size}" } }
-                }.onSuccess { typeCache = it }
+        override fun localTypes() = typeCache.orCatching {
+            val account = checkNotNull(account()) { "Current account not resolved" }
+            val out = sortedSetOf<Int>()
+            tables().getOrThrow().forEach { table ->
+                val column = table.typeColumn.takeIf { it in table.columns } ?: return@forEach
+                val floor = if (column == STAT_TYPE) MIN_STAT_TYPE else 1
+                distinctInts(table, column, account).getOrThrow().filterTo(out) { it >= floor }
             }
+            out.toList().also { log.info { "Local types=${it.size}" } }
+        }
 
         override fun invalidate() {
-            tableCache = null
-            typeCache = null
-            accountCache = null
+            tableCache.clear()
+            typeCache.clear()
+            accountCache.clear()
             databases.clear()
         }
 

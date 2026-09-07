@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.model.NameSource
+import moe.evil.hwhh.xposed.utils.Memo
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 import moe.evil.hwhh.xposed.utils.wrapper.Modifiers
 import moe.evil.hwhh.xposed.utils.wrapper.classOf
@@ -74,8 +75,7 @@ internal object HealthMetadataHostHooker :
 
     private lateinit var members: Members
 
-    @Volatile
-    private var dictionaryEntries: Map<Int, HostDictionaryEntry>? = null
+    private val dictionaryEntries = Memo<Map<Int, HostDictionaryEntry>>()
 
     private val enumNames by lazy {
         var unreadable = 0
@@ -106,62 +106,54 @@ internal object HealthMetadataHostHooker :
         }.also { log.debug { "Paired key names=${it.size}" } }
     }
 
-    override val providedApi = object : HealthMetadataHostApi {
-        override val isMajor get() = this@HealthMetadataHostHooker.isMajor
-        override val isAvailable get() = this@HealthMetadataHostHooker.isAvailable
-        override val availabilityError get() = this@HealthMetadataHostHooker.availabilityError
-        override val enumNames get() = this@HealthMetadataHostHooker.enumNames
-        override val keyNames get() = this@HealthMetadataHostHooker.keyNames
-        override val trackIdArrays get() = members.trackIdArrays()
-        override fun dictionary() =
-            dictionaryEntries?.let { Result.success(it) }
-                ?: synchronized(this@HealthMetadataHostHooker) {
-                    dictionaryEntries?.let { Result.success(it) } ?: runCatching {
-                        val raw = checkNotNull(members.dictionaryJson()) {
-                            "Host dictionary unreadable"
-                        }
-                        json.decodeFromString<DictJson>(raw).let { parsed ->
-                            buildMap {
-                                parsed.dictTypes.forEach { dataType ->
-                                    dataType.typeId.takeIf { it > 0 }?.let {
+    override val providedApi: HealthMetadataHostApi =
+        object : HealthMetadataHostApi, MetadataSourceApi by availability {
+            override val enumNames get() = this@HealthMetadataHostHooker.enumNames
+            override val keyNames get() = this@HealthMetadataHostHooker.keyNames
+            override val trackIdArrays get() = members.trackIdArrays()
+            override fun dictionary() = dictionaryEntries.orCatching {
+                val raw = checkNotNull(members.dictionaryJson()) { "Host dictionary unreadable" }
+                json.decodeFromString<DictJson>(raw).let { parsed ->
+                    buildMap {
+                        parsed.dictTypes.forEach { dataType ->
+                            dataType.typeId.takeIf { it > 0 }?.let {
+                                this[it] = HostDictionaryEntry(
+                                    dataType.name,
+                                    null,
+                                    null,
+                                    NameSource.DICT_TYPE,
+                                )
+                            }
+                            dataType.fields.forEach { field ->
+                                val unit = field.unit?.takeIf(String::isNotEmpty)
+                                field.healthType.takeIf { it > 0 }?.let {
+                                    this[it] = HostDictionaryEntry(
+                                        field.name,
+                                        unit,
+                                        null,
+                                        NameSource.DICT_FIELD,
+                                    )
+                                }
+                                field.statPolicies.forEach { stat ->
+                                    stat.statType.takeIf { it > 0 }?.let {
                                         this[it] = HostDictionaryEntry(
-                                            dataType.name,
-                                            null,
-                                            null,
-                                            NameSource.DICT_TYPE,
+                                            stat.statFieldName?.let { fieldName ->
+                                                stat.statPolicy?.let { policy ->
+                                                    "$fieldName ${policy.lowercase()}"
+                                                } ?: fieldName
+                                            },
+                                            unit,
+                                            stat.statPolicy,
+                                            NameSource.DICT_STAT,
                                         )
-                                    }
-                                    dataType.fields.forEach { field ->
-                                        val unit = field.unit?.takeIf(String::isNotEmpty)
-                                        field.healthType.takeIf { it > 0 }?.let {
-                                            this[it] = HostDictionaryEntry(
-                                                field.name,
-                                                unit,
-                                                null,
-                                                NameSource.DICT_FIELD,
-                                            )
-                                        }
-                                        field.statPolicies.forEach { stat ->
-                                            stat.statType.takeIf { it > 0 }?.let {
-                                                this[it] = HostDictionaryEntry(
-                                                    stat.statFieldName?.let { fieldName ->
-                                                        stat.statPolicy?.let { policy ->
-                                                            "$fieldName ${policy.lowercase()}"
-                                                        } ?: fieldName
-                                                    },
-                                                    unit,
-                                                    stat.statPolicy,
-                                                    NameSource.DICT_STAT,
-                                                )
-                                            }
-                                        }
                                     }
                                 }
                             }
                         }
-                    }.onSuccess { dictionaryEntries = it }
+                    }
                 }
-    }
+            }
+        }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
         val dataType = classOf<HiHealthDataType>()

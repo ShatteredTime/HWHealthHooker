@@ -20,12 +20,10 @@ internal object HealthMetadataAnalysisHooker :
     @Volatile
     private var analyzed: AnalyzedNames? = null
 
-    override val providedApi = object : HealthMetadataAnalysisApi {
-        override val isMajor get() = this@HealthMetadataAnalysisHooker.isMajor
-        override val isAvailable get() = this@HealthMetadataAnalysisHooker.isAvailable
-        override val availabilityError get() = this@HealthMetadataAnalysisHooker.availabilityError
-        override fun snapshot() = analyzed
-    }
+    override val providedApi: HealthMetadataAnalysisApi =
+        object : HealthMetadataAnalysisApi, MetadataSourceApi by availability {
+            override fun snapshot() = analyzed
+        }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
         val tag = hostBuildTag(appInfo.sourceDir)

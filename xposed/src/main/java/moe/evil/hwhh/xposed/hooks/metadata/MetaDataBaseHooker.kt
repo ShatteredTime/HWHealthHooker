@@ -5,37 +5,23 @@ import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 
 internal abstract class MetaDataBaseHooker<A : MetadataSourceApi>(
-    protected val isMajor: Boolean = true,
+    private val isMajor: Boolean = true,
 ) : DexKitHooker<A>() {
     private val log = HLog(javaClass.simpleName)
 
     @Volatile
-    protected var isAvailable = false
-        private set
-
-    @Volatile
-    protected var availabilityError: Throwable? =
+    private var availabilityError: Throwable? =
         IllegalStateException("Metadata source has not reported its availability")
-        private set
 
-    private fun markAvailable() {
-        availabilityError = null
-        isAvailable = true
+    protected val availability: MetadataSourceApi = object : MetadataSourceApi {
+        override val isMajor get() = this@MetaDataBaseHooker.isMajor
+        override val isAvailable get() = this@MetaDataBaseHooker.availabilityError == null
+        override val availabilityError get() = this@MetaDataBaseHooker.availabilityError
     }
-
-    private fun markUnavailable(error: Throwable) {
-        isAvailable = false
-        availabilityError = error
-        log.warn(error) { "Unavailable" }
-    }
-
-    private fun <R> guard(block: () -> R) =
-        runCatching(block)
-            .onSuccess { markAvailable() }
-            .onFailure { markUnavailable(it) }
-            .getOrNull()
 
     final override fun dispatchHook(bridge: HostBridge) {
-        guard { onHookWithDexKit(bridge) }
+        availabilityError = runCatching { onHookWithDexKit(bridge) }
+            .onFailure { log.warn(it) { "Unavailable" } }
+            .exceptionOrNull()
     }
 }

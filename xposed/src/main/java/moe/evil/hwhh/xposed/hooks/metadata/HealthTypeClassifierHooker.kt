@@ -16,12 +16,10 @@ internal object HealthTypeClassifierHooker :
     @Volatile
     private var classifier: HostMethod<HiHealthDataType.Category>? = null
 
-    override val providedApi = object : HealthTypeClassifierApi {
-        override val isMajor get() = this@HealthTypeClassifierHooker.isMajor
-        override val isAvailable get() = this@HealthTypeClassifierHooker.isAvailable
-        override val availabilityError get() = this@HealthTypeClassifierHooker.availabilityError
-        override fun classify(type: Int) = classifier?.invokeOrNull(null, type)
-    }
+    override val providedApi: HealthTypeClassifierApi =
+        object : HealthTypeClassifierApi, MetadataSourceApi by availability {
+            override fun classify(type: Int) = classifier?.invokeOrNull(null, type)
+        }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
         classifier = bridge.requireMethod<HiHealthDataType.Category>(

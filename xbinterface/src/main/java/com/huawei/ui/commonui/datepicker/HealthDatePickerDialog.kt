@@ -11,7 +11,7 @@ class HealthDatePickerDialog(
     listener: DateSelectedListener,
     calendar: GregorianCalendar,
 ) : Dialog(activity) {
-    fun interface DateSelectedListener {
+    interface DateSelectedListener {
         fun onDateSelected(year: Int, month: Int, dayOfMonth: Int)
     }
 }
