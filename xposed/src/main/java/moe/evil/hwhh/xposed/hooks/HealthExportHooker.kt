@@ -16,7 +16,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.ui.commonui.checkbox.HealthCheckBox
 import com.huawei.ui.commonui.datepicker.HealthDatePickerDialog
 import com.huawei.ui.commonui.popupview.PopViewList
@@ -24,18 +23,10 @@ import com.huawei.ui.commonui.titlebar.CustomTitleBar
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostField
-import moe.evil.hwhh.kdxref.describe
-import moe.evil.hwhh.kdxref.firstConstructorOrNullLogged
-import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
-import moe.evil.hwhh.kdxref.hostField
-import moe.evil.hwhh.kdxref.hostMethod
-import moe.evil.hwhh.kdxref.safeHook
-import moe.evil.hwhh.kdxref.toClassOrLog
 import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.R
 import moe.evil.hwhh.xposed.model.HealthMetadata
 import moe.evil.hwhh.xposed.model.HealthQueryRequest
@@ -45,6 +36,14 @@ import moe.evil.hwhh.xposed.utils.ShareExporter
 import moe.evil.hwhh.xposed.utils.ShareOutcome
 import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.getOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.requireClass
+import moe.evil.hwhh.xposed.utils.wrapper.requireConstructor
+import moe.evil.hwhh.xposed.utils.wrapper.requireField
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
+import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.io.File
 import java.lang.ref.WeakReference
 import java.util.Calendar
@@ -63,7 +62,6 @@ object HealthExportHooker : DexKitBaseHooker() {
     private val query by require { HealthQueryHooker }
     private val metadata by require { HealthMetadataHooker }
     private val db by require { HiHealthDbHooker }
-    private var titleBarField: HostField<CustomTitleBar>? = null
     private var currentTitleBar: WeakReference<CustomTitleBar>? = null
     private val exportPopupItems = WeakHashMap<PopViewList, ArrayList<String>>()
 
@@ -98,37 +96,35 @@ object HealthExportHooker : DexKitBaseHooker() {
     }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        val homeFragmentClazz = context(this@HealthExportHooker) {
-            HealthExportHooker.HOME_FRAGMENT_CLASS.toClassOrLog()
-        } ?: return
+        val homeFragmentClazz = bridge.requireClass(HOME_FRAGMENT_CLASS)
 
-        titleBarField = hostField<CustomTitleBar>(
+        val titleBarField = bridge.requireField<CustomTitleBar>(
             label = "HomeFragment#titleBar",
             inPackage = HOME_FRAGMENT_CLASS.substringBeforeLast('.'),
         ) {
             declaredClass(homeFragmentClazz)
-        } ?: return
+        }
 
-        homeFragmentClazz.firstMethodOrNullLogged {
+        homeFragmentClazz.requireMethod {
             name = "onActivityCreated"
             parameters(classOf<Bundle>())
-        }?.safeHook {
+        }.safeHook {
             after {
-                currentTitleBar = titleBarField?.on(instanceOrNull)?.let { WeakReference(it) }
+                currentTitleBar = titleBarField.getOrNull(instanceOrNull)?.let { WeakReference(it) }
             }
         }
 
-        val setClickListener = hostMethod<Unit>(
+        val setClickListener = bridge.requireMethod<Unit>(
             label = "PopViewList#setClickListener",
             inPackage = "com.huawei.ui.commonui.popupview",
         ) {
             declaredClass(classOf<PopViewList>())
             paramTypes(classOf<PopViewList.PopViewClickListener>())
-        } ?: return
+        }
 
-        classOf<PopViewList>().firstConstructorOrNullLogged {
+        classOf<PopViewList>().requireConstructor {
             parameters(classOf<Context>(), classOf<View>(), classOf<ArrayList<String>>())
-        }?.safeHook {
+        }.safeHook {
             before {
                 val titleBar = currentTitleBar?.get() ?: return@before
                 if (args(1).cast<View?>() !== titleBar) return@before

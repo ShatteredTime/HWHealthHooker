@@ -3,16 +3,11 @@ package moe.evil.hwhh.xposed.hooks
 import android.app.Activity
 import android.os.Bundle
 import android.view.View
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.ui.commonui.titlebar.CustomTitleBar
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.describe
-import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
-import moe.evil.hwhh.kdxref.safeHook
-import moe.evil.hwhh.kdxref.toClassOrLog
 import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.R
 import moe.evil.hwhh.xposed.sportdata.exporter.SportHistoryExporter
 import moe.evil.hwhh.xposed.sportdata.exporter.ensureExportDir
@@ -22,6 +17,11 @@ import moe.evil.hwhh.xposed.utils.ShareOutcome
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
 import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.requireClass
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
+import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -36,16 +36,13 @@ object SportHistoryExportHooker : DexKitBaseHooker() {
     private val history by require { SportHistoryHooker }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        val activityClazz = context(this@SportHistoryExportHooker) {
-            "com.huawei.ui.main.stories.history.SportHistoryActivity".toClassOrLog()
-        } ?: return
-
-        activityClazz.firstMethodOrNullLogged {
-            name = "onCreate"
-            parameters(classOf<Bundle>())
-        }?.safeHook {
-            after { (instanceOrNull as? Activity)?.let(::addExportButton) }
-        }
+        bridge.requireClass("com.huawei.ui.main.stories.history.SportHistoryActivity")
+            .requireMethod {
+                name = "onCreate"
+                parameters(classOf<Bundle>())
+            }.safeHook {
+                after { (instanceOrNull as? Activity)?.let(::addExportButton) }
+            }
     }
 
     private fun addExportButton(activity: Activity) {

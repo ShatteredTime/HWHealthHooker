@@ -4,26 +4,30 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.Context
 import android.view.View
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.ui.commonui.dialog.CustomProgressDialog
 import com.huawei.ui.commonui.dialog.CustomTextAlertDialog
 import com.huawei.ui.commonui.dialog.CustomViewDialog
 import com.huawei.ui.commonui.dialog.NoTitleCustomAlertDialog
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostConstructor
-import moe.evil.hwhh.kdxref.HostFieldData
-import moe.evil.hwhh.kdxref.HostMethod
-import moe.evil.hwhh.kdxref.HostMethodData
-import moe.evil.hwhh.kdxref.firstConstructorOrNullLogged
-import moe.evil.hwhh.kdxref.hostMethod
-import moe.evil.hwhh.kdxref.hostMethodOf
-import moe.evil.hwhh.kdxref.orWarnEmpty
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.R
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.HookApi
 import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.HostConstructor
+import moe.evil.hwhh.xposed.utils.wrapper.HostFieldData
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethod
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethodData
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.createOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.invokeOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.method
+import moe.evil.hwhh.xposed.utils.wrapper.optionally
+import moe.evil.hwhh.xposed.utils.wrapper.orFail
+import moe.evil.hwhh.xposed.utils.wrapper.requireConstructor
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
+import moe.evil.hwhh.xposed.utils.wrapper.requireNotEmpty
 
 internal data class DialogButton(
     val text: String,
@@ -68,11 +72,11 @@ internal class ProgressDialogHandle internal constructor(
     fun dismiss() = activity.runOnUiThread { session?.dialog?.dismiss() }
 
     fun setProgress(percent: Int) = activity.runOnUiThread {
-        session?.run { progressMethod.on(builder).invokeQuietly(percent) }
+        session?.run { progressMethod.invokeOrNull(builder, percent) }
     }
 
     fun setMessage(text: String) = activity.runOnUiThread {
-        session?.run { descMethod.on(builder).invokeQuietly(text) }
+        session?.run { descMethod.invokeOrNull(builder, text) }
     }
 }
 
@@ -168,19 +172,19 @@ internal object CommonUIHooker : DexKitHooker<CommonUiApi>() {
         ) = PendingDialog(activity) {
             val members = customMembers ?: return@PendingDialog null
             if (!activity.isDialogHostReady()) return@PendingDialog null
-            val builder = members.constructor.createLogged(activity) ?: return@PendingDialog null
-            members.context.on(builder).invokeQuietly(activity) ?: return@PendingDialog null
-            members.title.on(builder).invokeQuietly(title) ?: return@PendingDialog null
-            members.message.on(builder).invokeQuietly(message) ?: return@PendingDialog null
+            val builder = members.constructor.createOrNull(activity) ?: return@PendingDialog null
+            members.context.invokeOrNull(builder, activity) ?: return@PendingDialog null
+            members.title.invokeOrNull(builder, title) ?: return@PendingDialog null
+            members.message.invokeOrNull(builder, message) ?: return@PendingDialog null
             positive?.let {
-                members.positive.on(builder).invokeQuietly(it.text, it.listener)
+                members.positive.invokeOrNull(builder, it.text, it.listener)
                     ?: return@PendingDialog null
             }
             negative?.let {
-                members.negative.on(builder).invokeQuietly(it.text, it.listener)
+                members.negative.invokeOrNull(builder, it.text, it.listener)
                     ?: return@PendingDialog null
             }
-            members.build.on(builder).invokeQuietly()
+            members.build.invokeOrNull(builder)
         }
 
         override fun createNoTitleCustomAlertDialog(
@@ -191,18 +195,18 @@ internal object CommonUIHooker : DexKitHooker<CommonUiApi>() {
         ) = PendingDialog(activity) {
             val members = noTitleMembers ?: return@PendingDialog null
             if (!activity.isDialogHostReady()) return@PendingDialog null
-            val builder = members.constructor.createLogged(activity) ?: return@PendingDialog null
-            members.context.on(builder).invokeQuietly(activity) ?: return@PendingDialog null
-            members.message.on(builder).invokeQuietly(message) ?: return@PendingDialog null
+            val builder = members.constructor.createOrNull(activity) ?: return@PendingDialog null
+            members.context.invokeOrNull(builder, activity) ?: return@PendingDialog null
+            members.message.invokeOrNull(builder, message) ?: return@PendingDialog null
             positive?.let {
-                members.positive.on(builder).invokeQuietly(it.text, it.listener)
+                members.positive.invokeOrNull(builder, it.text, it.listener)
                     ?: return@PendingDialog null
             }
             negative?.let {
-                members.negative.on(builder).invokeQuietly(it.text, it.listener)
+                members.negative.invokeOrNull(builder, it.text, it.listener)
                     ?: return@PendingDialog null
             }
-            members.build.on(builder).invokeQuietly()
+            members.build.invokeOrNull(builder)
         }
 
         override fun createProgressDialog(
@@ -212,14 +216,14 @@ internal object CommonUIHooker : DexKitHooker<CommonUiApi>() {
         ) = ProgressDialogHandle(activity) session@{
             val members = progressMembers ?: return@session null
             if (!activity.isDialogHostReady()) return@session null
-            val builder = members.constructor.createLogged(activity) ?: return@session null
-            members.desc.on(builder).invokeQuietly(message) ?: return@session null
+            val builder = members.constructor.createOrNull(activity) ?: return@session null
+            members.desc.invokeOrNull(builder, message) ?: return@session null
             onCancel?.let { listener ->
                 members.cancelListeners.forEach { method ->
-                    method.on(builder).invokeQuietly(listener) ?: return@session null
+                    method.invokeOrNull(builder, listener) ?: return@session null
                 }
             }
-            val dialog = members.build.on(builder).invokeQuietly() ?: return@session null
+            val dialog = members.build.invokeOrNull(builder) ?: return@session null
             ProgressDialogHandle.Session(dialog, builder, members.progress, members.desc)
         }
 
@@ -232,24 +236,22 @@ internal object CommonUIHooker : DexKitHooker<CommonUiApi>() {
         ) = PendingDialog(activity) {
             val members = customViewMembers ?: return@PendingDialog null
             if (!activity.isDialogHostReady()) return@PendingDialog null
-            val builder = members.constructor.createLogged(activity) ?: return@PendingDialog null
-            members.title.on(builder).invokeQuietly(title) ?: return@PendingDialog null
-            members.contentView.on(builder).invokeQuietly(contentView) ?: return@PendingDialog null
-            members.positive.on(builder).invokeQuietly(positive.text, positive.listener)
+            val builder = members.constructor.createOrNull(activity) ?: return@PendingDialog null
+            members.title.invokeOrNull(builder, title) ?: return@PendingDialog null
+            members.contentView.invokeOrNull(builder, contentView) ?: return@PendingDialog null
+            members.positive.invokeOrNull(builder, positive.text, positive.listener)
                 ?: return@PendingDialog null
-            members.negative.on(builder).invokeQuietly(negative.text, negative.listener)
+            members.negative.invokeOrNull(builder, negative.text, negative.listener)
                 ?: return@PendingDialog null
-            members.build.on(builder).invokeQuietly()
+            members.build.invokeOrNull(builder)
         }
     }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        customMembers = run custom@{
+        customMembers = optionally("CustomTextAlertDialog") {
             val builder = classOf<CustomTextAlertDialog.Builder>()
-            val constructor = builder.firstConstructorOrNullLogged {
-                parameters(classOf<Context>())
-            } ?: return@custom null
-            val title = hostMethod<CustomTextAlertDialog.Builder>(
+            val constructor = builder.requireConstructor { parameters(classOf<Context>()) }
+            val title = bridge.requireMethod<CustomTextAlertDialog.Builder>(
                 label = "CustomTextAlertDialog.Builder#title",
                 pick = {
                     singleOrNull { it.isPublic && it.usingStrings.any { s -> "setTitle" in s } }
@@ -257,96 +259,96 @@ internal object CommonUIHooker : DexKitHooker<CommonUiApi>() {
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>())
-            } ?: return@custom null
-            val message = hostMethod<CustomTextAlertDialog.Builder>(
+            }
+            val message = bridge.requireMethod<CustomTextAlertDialog.Builder>(
                 label = "CustomTextAlertDialog.Builder#message",
                 pick = { singleOrNull { it.isPublic && it.name != title.name } },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>())
-            } ?: return@custom null
-            val positiveFields = bridge.positiveButtonFields(builder) ?: return@custom null
-            val positive = hostMethod<CustomTextAlertDialog.Builder>(
+            }
+            val positiveFields = bridge.positiveButtonFields(builder)
+                .orFail { "CustomTextAlertDialog.Builder#positiveFields" }
+            val positive = bridge.requireMethod<CustomTextAlertDialog.Builder>(
                 label = "CustomTextAlertDialog.Builder#positive",
                 pick = { pickButton(positiveFields) },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>(), classOf<View.OnClickListener>())
-            } ?: return@custom null
-            val negative = hostMethod<CustomTextAlertDialog.Builder>(
+            }
+            val negative = bridge.requireMethod<CustomTextAlertDialog.Builder>(
                 label = "CustomTextAlertDialog.Builder#negative",
                 pick = { singleOrNull { it.isPublic && it.name != positive.name } },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>(), classOf<View.OnClickListener>())
-            } ?: return@custom null
-            val context = hostMethod<CustomTextAlertDialog.Builder>(
+            }
+            val context = bridge.requireMethod<CustomTextAlertDialog.Builder>(
                 label = "CustomTextAlertDialog.Builder#context",
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<Context>())
-            } ?: return@custom null
-            val build = hostMethod<CustomTextAlertDialog>("CustomTextAlertDialog.Builder#build") {
+            }
+            val build = bridge.requireMethod<CustomTextAlertDialog>(
+                label = "CustomTextAlertDialog.Builder#build",
+            ) {
                 declaredClass(builder)
                 paramTypes()
-            } ?: return@custom null
+            }
             CustomMembers(constructor, context, title, message, positive, negative, build)
         }
 
-        noTitleMembers = run noTitle@{
+        noTitleMembers = optionally("NoTitleCustomAlertDialog") {
             val builder = classOf<NoTitleCustomAlertDialog.Builder>()
-            val constructor = builder.firstConstructorOrNullLogged {
-                parameters(classOf<Context>())
-            } ?: return@noTitle null
-            val message = hostMethod<NoTitleCustomAlertDialog.Builder>(
+            val constructor = builder.requireConstructor { parameters(classOf<Context>()) }
+            val message = bridge.requireMethod<NoTitleCustomAlertDialog.Builder>(
                 label = "NoTitleCustomAlertDialog.Builder#message",
                 pick = { singleOrNull { it.isPublic && it.usingFieldCount > 0 } },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>())
-            } ?: return@noTitle null
-            val positiveFields = bridge.positiveButtonFields(builder) ?: return@noTitle null
-            val positive = hostMethod<NoTitleCustomAlertDialog.Builder>(
+            }
+            val positiveFields = bridge.positiveButtonFields(builder)
+                .orFail { "NoTitleCustomAlertDialog.Builder#positiveFields" }
+            val positive = bridge.requireMethod<NoTitleCustomAlertDialog.Builder>(
                 label = "NoTitleCustomAlertDialog.Builder#positive",
                 pick = { pickButton(positiveFields) },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>(), classOf<View.OnClickListener>())
-            } ?: return@noTitle null
-            val negative = hostMethod<NoTitleCustomAlertDialog.Builder>(
+            }
+            val negative = bridge.requireMethod<NoTitleCustomAlertDialog.Builder>(
                 label = "NoTitleCustomAlertDialog.Builder#negative",
                 pick = { singleOrNull { it.isPublic && it.name != positive.name } },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>(), classOf<View.OnClickListener>())
-            } ?: return@noTitle null
-            val context = hostMethod<NoTitleCustomAlertDialog.Builder>(
+            }
+            val context = bridge.requireMethod<NoTitleCustomAlertDialog.Builder>(
                 label = "NoTitleCustomAlertDialog.Builder#context",
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<Context>())
-            } ?: return@noTitle null
-            val build = hostMethod<NoTitleCustomAlertDialog>(
+            }
+            val build = bridge.requireMethod<NoTitleCustomAlertDialog>(
                 label = "NoTitleCustomAlertDialog.Builder#build",
             ) {
                 declaredClass(builder)
                 paramTypes()
-            } ?: return@noTitle null
+            }
             NoTitleMembers(constructor, context, message, positive, negative, build)
         }
 
-        progressMembers = run progress@{
+        progressMembers = optionally("CustomProgressDialog") {
             val builder = classOf<CustomProgressDialog.Builder>()
-            val constructor = builder.firstConstructorOrNullLogged {
-                parameters(classOf<Context>())
-            } ?: return@progress null
-            val desc = hostMethod<CustomProgressDialog.Builder>(
+            val constructor = builder.requireConstructor { parameters(classOf<Context>()) }
+            val desc = bridge.requireMethod<CustomProgressDialog.Builder>(
                 label = "CustomProgressDialog.Builder#desc",
                 pick = { singleOrNull { it.isPublic && it.usingFieldCount >= 2 } },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>())
-            } ?: return@progress null
+            }
             val cancelListeners = bridge.findMethod {
                 matcher {
                     declaredClass(builder)
@@ -354,61 +356,63 @@ internal object CommonUIHooker : DexKitHooker<CommonUiApi>() {
                     paramTypes(classOf<View.OnClickListener>())
                 }
             }.filter { it.isPublic }.mapNotNull {
-                hostMethodOf<CustomProgressDialog.Builder>(
+                bridge.method<CustomProgressDialog.Builder>(
                     "CustomProgressDialog.Builder#cancel",
                     it,
                 )
-            }.orWarnEmpty("CustomProgressDialog.Builder#cancel").ifEmpty { return@progress null }
-            val progress = hostMethod<CustomProgressDialog.Builder>(
+            }.requireNotEmpty("CustomProgressDialog.Builder#cancel")
+            val progress = bridge.requireMethod<CustomProgressDialog.Builder>(
                 label = "CustomProgressDialog.Builder#progress",
                 pick = { singleOrNull(HostMethodData::isPublic) },
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<Int>())
                 addInvoke { name = "setProgress" }
-            } ?: return@progress null
-            val build = hostMethod<CustomProgressDialog>("CustomProgressDialog.Builder#build") {
+            }
+            val build = bridge.requireMethod<CustomProgressDialog>(
+                label = "CustomProgressDialog.Builder#build",
+            ) {
                 declaredClass(builder)
                 paramTypes()
-            } ?: return@progress null
+            }
             ProgressMembers(constructor, desc, cancelListeners, progress, build)
         }
 
-        customViewMembers = run customView@{
+        customViewMembers = optionally("CustomViewDialog") {
             val builder = classOf<CustomViewDialog.Builder>()
-            val constructor = builder.firstConstructorOrNullLogged {
-                parameters(classOf<Context>())
-            } ?: return@customView null
-            val title = hostMethod<CustomViewDialog.Builder>(
+            val constructor = builder.requireConstructor { parameters(classOf<Context>()) }
+            val title = bridge.requireMethod<CustomViewDialog.Builder>(
                 label = "CustomViewDialog.Builder#title",
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>())
-            } ?: return@customView null
-            val contentView = hostMethod<CustomViewDialog.Builder>(
+            }
+            val contentView = bridge.requireMethod<CustomViewDialog.Builder>(
                 label = "CustomViewDialog.Builder#contentView",
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<View>())
-            } ?: return@customView null
-            val positive = hostMethod<CustomViewDialog.Builder>(
+            }
+            val positive = bridge.requireMethod<CustomViewDialog.Builder>(
                 label = "CustomViewDialog.Builder#positive",
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>(), classOf<View.OnClickListener>())
                 usingStrings = listOf("setPositiveButton called")
-            } ?: return@customView null
-            val negative = hostMethod<CustomViewDialog.Builder>(
+            }
+            val negative = bridge.requireMethod<CustomViewDialog.Builder>(
                 label = "CustomViewDialog.Builder#negative",
             ) {
                 declaredClass(builder)
                 paramTypes(classOf<String>(), classOf<View.OnClickListener>())
                 usingStrings = listOf("setNegativeButton called")
-            } ?: return@customView null
-            val build = hostMethod<CustomViewDialog>("CustomViewDialog.Builder#build") {
+            }
+            val build = bridge.requireMethod<CustomViewDialog>(
+                label = "CustomViewDialog.Builder#build",
+            ) {
                 declaredClass(builder)
                 paramTypes()
-            } ?: return@customView null
+            }
             CustomViewMembers(constructor, title, contentView, positive, negative, build)
         }
 

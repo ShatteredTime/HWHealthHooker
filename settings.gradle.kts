@@ -31,6 +31,5 @@ rootProject.name = "HWHealthHooker"
 include(":app")
 include(":shared")
 include(":xposed")
-include(":kdxref")
 include(":xbinterface")
 include(":analyzer")

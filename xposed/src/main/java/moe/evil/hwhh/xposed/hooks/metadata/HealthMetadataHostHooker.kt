@@ -1,8 +1,6 @@
 package moe.evil.hwhh.xposed.hooks.metadata
 
 import android.content.Context
-import com.highcapable.kavaref.condition.type.Modifiers
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.hihealth.data.constant.HiHealthDataKey
 import com.huawei.hihealth.data.type.HiHealthDataType
 import com.huawei.hihealth.dictionary.HiHealthDictManager
@@ -12,13 +10,19 @@ import com.huawei.hihealthservice.store.stat.HiDicHealthDataStat
 import com.huawei.hihealthservice.store.stat.HiTrackStat
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.hostGsonToJson
-import moe.evil.hwhh.kdxref.hostMethod
-import moe.evil.hwhh.kdxref.orWarnEmpty
-import moe.evil.hwhh.kdxref.resolveAny
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.model.NameSource
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.Modifiers
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.fields
+import moe.evil.hwhh.xposed.utils.wrapper.getOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.hostClass
+import moe.evil.hwhh.xposed.utils.wrapper.hostGsonToJson
+import moe.evil.hwhh.xposed.utils.wrapper.invokeOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.method
+import moe.evil.hwhh.xposed.utils.wrapper.orWarnEmpty
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
 
 @Serializable
 private data class DictJson(val dictTypes: List<DictTypeJson> = emptyList())
@@ -59,10 +63,6 @@ internal interface HealthMetadataHostApi : MetadataSourceApi {
 
 internal object HealthMetadataHostHooker :
     MetaDataBaseHooker<HealthMetadataHostApi>() {
-    private const val KEY_CLASS = "com.huawei.hihealth.data.constant.HiHealthDataKey"
-    private const val TRACK_CLASS = "com.huawei.hihealthservice.store.stat.HiTrackStat"
-    private const val DICT_TRACK_CLASS = "com.huawei.hihealthservice.store.stat.HiDicHealthDataStat"
-    private const val DICT_MANAGER_CLASS = "com.huawei.hihealth.dictionary.HiHealthDictManager"
     private val log = HLog.of<HealthMetadataHostHooker>()
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -72,8 +72,7 @@ internal object HealthMetadataHostHooker :
         val pairedArrays: () -> List<HostPairedArrays>,
     )
 
-    @Volatile
-    private var members: Members? = null
+    private lateinit var members: Members
 
     @Volatile
     private var dictionaryEntries: Map<Int, HostDictionaryEntry>? = null
@@ -98,7 +97,7 @@ internal object HealthMetadataHostHooker :
 
     private val keyNames by lazy {
         buildMap {
-            members?.pairedArrays?.invoke().orEmpty().forEach { (ids, keys) ->
+            members.pairedArrays().forEach { (ids, keys) ->
                 if (ids.size != keys.size) return@forEach
                 ids.forEachIndexed { index, id ->
                     if (id > 0) keys[index]?.takeIf(String::isNotEmpty)?.let { put(id, it) }
@@ -107,21 +106,18 @@ internal object HealthMetadataHostHooker :
         }.also { log.debug { "Paired key names=${it.size}" } }
     }
 
-    private val trackIdArrays
-        get() = members?.trackIdArrays?.invoke().orEmpty()
-
     override val providedApi = object : HealthMetadataHostApi {
         override val isMajor get() = this@HealthMetadataHostHooker.isMajor
         override val isAvailable get() = this@HealthMetadataHostHooker.isAvailable
         override val availabilityError get() = this@HealthMetadataHostHooker.availabilityError
         override val enumNames get() = this@HealthMetadataHostHooker.enumNames
         override val keyNames get() = this@HealthMetadataHostHooker.keyNames
-        override val trackIdArrays get() = this@HealthMetadataHostHooker.trackIdArrays
+        override val trackIdArrays get() = members.trackIdArrays()
         override fun dictionary() =
             dictionaryEntries?.let { Result.success(it) }
                 ?: synchronized(this@HealthMetadataHostHooker) {
                     dictionaryEntries?.let { Result.success(it) } ?: runCatching {
-                        val raw = checkNotNull(members?.dictionaryJson?.invoke()) {
+                        val raw = checkNotNull(members.dictionaryJson()) {
                             "Host dictionary unreadable"
                         }
                         json.decodeFromString<DictJson>(raw).let { parsed ->
@@ -169,63 +165,41 @@ internal object HealthMetadataHostHooker :
 
     override fun onHookWithDexKit(bridge: HostBridge) {
         val dataType = classOf<HiHealthDataType>()
-        val manager = runCatching { classOf<HiHealthDictManager>() }
-            .getOrElse { cause ->
-                throw IllegalStateException(
-                    "Class NOT found: $DICT_MANAGER_CLASS",
-                    cause
-                )
-            }
-        val dataTypeScope = dataType.resolveAny()
-        val managerOf = checkNotNull(
-            hostMethod<HiHealthDictManager>(
-                label = "HiHealthDictManager#instance",
-                pick = { singleOrNull { it.isStatic && it.isPublic } },
-            ) {
-                declaredClass(manager)
-                paramTypes(classOf<Context>())
-            }
-        ) { "HiHealthDictManager factory not resolved" }
-        val dictionaryOf = checkNotNull(
-            hostMethod<HiHealthDictionary>("HiHealthDictManager#dictionary") {
-                declaredClass(manager)
-                paramTypes()
-            }
-        ) { "HiHealthDictionary accessor not resolved" }
+        val manager = classOf<HiHealthDictManager>()
+        val managerOf = bridge.requireMethod<HiHealthDictManager>(
+            label = "HiHealthDictManager#instance",
+            pick = { singleOrNull { it.isStatic && it.isPublic } },
+        ) {
+            declaredClass(manager)
+            paramTypes(classOf<Context>())
+        }
+        val dictionaryOf = bridge.requireMethod<HiHealthDictionary>(
+            label = "HiHealthDictManager#dictionary",
+        ) {
+            declaredClass(manager)
+            paramTypes()
+        }
 
-        val trackReaders = listOf(
-            TRACK_CLASS to runCatching { classOf<HiTrackStat>() },
-            DICT_TRACK_CLASS to runCatching { classOf<HiDicHealthDataStat>() },
-        ).flatMap { (className, loaded) ->
-            loaded
-                .onFailure { log.warn { "Class not found: $className" } }
-                .getOrNull()
-                ?.resolveAny()
-                ?.fields {
+        val trackReaders = listOfNotNull(hostClass<HiTrackStat>(), hostClass<HiDicHealthDataStat>())
+            .flatMap { clazz ->
+                clazz.fields {
                     modifiers(Modifiers.STATIC)
                     type {
                         it.isArray &&
                                 it.componentType == classOf<Int>(primitiveType = false)
                     }
-                }
-                ?.orWarnEmpty("static Integer[] field in $className")
-                .orEmpty()
-                .map { field ->
+                }.orWarnEmpty("static Integer[] field in ${clazz.name}").map { field ->
                     {
-                        (field.get() as? Array<*>)?.filterIsInstance<Int>()?.let { ids ->
+                        (field.getOrNull(null) as? Array<*>)?.filterIsInstance<Int>()?.let { ids ->
                             HostTrackArray("${field.owner.name}.${field.name}", ids)
                         } ?: null.also {
                             log.warn { "Track array ${field.name} unreadable" }
                         }
                     }
                 }
-        }.also { log.debug { "Track array readers=${it.size}" } }
+            }.also { log.debug { "Track array readers=${it.size}" } }
 
-        val keyType = runCatching { classOf<HiHealthDataKey>() }
-            .onFailure { log.warn { "Class not found: $KEY_CLASS" } }
-            .getOrNull()
-        val pairedGetters = keyType?.let { key ->
-            val keyScope = key.resolveAny()
+        val pairedGetters = hostClass<HiHealthDataKey>()?.let { key ->
             bridge.findMethod {
                 matcher {
                     addInvoke {
@@ -255,17 +229,11 @@ internal object HealthMetadataHostHooker :
                 val keyName = keyNames.singleOrNull()
                 if (idName == null || keyName == null) null else idName to keyName
             }.distinct().mapNotNull { (idName, keyName) ->
-                val idGetter = dataTypeScope.firstMethodOrNullLogged(
-                    dataType,
-                    classOf<IntArray>(),
-                ) {
+                val idGetter = dataType.method(classOf<IntArray>()) {
                     name = idName
                     emptyParameters()
                 } ?: return@mapNotNull null
-                val keyGetter = keyScope.firstMethodOrNullLogged(
-                    key,
-                    classOf<Array<String>>(),
-                ) {
+                val keyGetter = key.method(classOf<Array<String>>()) {
                     name = keyName
                     emptyParameters()
                 } ?: return@mapNotNull null
@@ -275,15 +243,15 @@ internal object HealthMetadataHostHooker :
 
         members = Members(
             dictionaryJson = {
-                managerOf.invokeQuietly(null)
-                    ?.let { dictionaryOf.on(it).invokeQuietly() }
+                managerOf.invokeOrNull(null, null)
+                    ?.let { dictionaryOf.invokeOrNull(it) }
                     ?.hostGsonToJson()
             },
             trackIdArrays = { trackReaders.mapNotNull { it() } },
             pairedArrays = {
                 pairedGetters.mapNotNull { (idGetter, keyGetter) ->
-                    val ids = idGetter.invokeQuietly()?.toList() ?: return@mapNotNull null
-                    val keys = keyGetter.invokeQuietly()?.toList() ?: return@mapNotNull null
+                    val ids = idGetter.invokeOrNull(null)?.toList() ?: return@mapNotNull null
+                    val keys = keyGetter.invokeOrNull(null)?.toList() ?: return@mapNotNull null
                     HostPairedArrays(ids, keys)
                 }
             },

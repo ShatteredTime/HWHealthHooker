@@ -3,21 +3,24 @@ package moe.evil.hwhh.xposed.hooks
 import android.content.Context
 import android.util.SparseArray
 import androidx.core.util.valueIterator
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.basefitnessadvice.model.intplan.RecordData
 import com.huawei.hihealth.HiHealthData
 import com.huawei.hwbasemgr.IBaseResponseCallback
 import com.huawei.hwfoundationmodel.trackmodel.MotionPath
 import com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostMethod
-import moe.evil.hwhh.kdxref.HostMethodData
-import moe.evil.hwhh.kdxref.hostMethod
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.model.SportRecord
 import moe.evil.hwhh.xposed.model.SportRecordParser
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.HookApi
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethod
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethodData
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.invoke
+import moe.evil.hwhh.xposed.utils.wrapper.method
+import moe.evil.hwhh.xposed.utils.wrapper.orFail
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -43,29 +46,22 @@ internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
         val readMotionPath: HostMethod<MotionPath>,
     )
 
-    @Volatile
-    private var members: Members? = null
+    private lateinit var members: Members
 
     override val providedApi = object : SportHistoryApi {
         override fun summaries(startMs: Long, endMs: Long) = runCatching {
-            checkNotNull(members) { "Summaries unavailable, hooker not ready" }
-                .summary.awaitList(startMs, endMs)
-                .filterIsInstance<RecordData>()
+            members.summary.awaitList(startMs, endMs).filterIsInstance<RecordData>()
         }
 
         override fun detail(startMs: Long, endMs: Long) = runCatching {
-            checkNotNull(members) { "Detail unavailable, hooker not ready" }
-                .detail.awaitList(startMs, endMs)
-                .filterIsInstance<HiHealthData>()
-                .firstOrNull()
+            members.detail.awaitList(startMs, endMs).filterIsInstance<HiHealthData>().firstOrNull()
         }
 
         override fun trackOf(context: Context, data: HiHealthData): TrackSource {
-            val resolved = checkNotNull(members) { "Track unavailable, hooker not ready" }
             val simplify = MotionPathSimplify()
-            val fileUrl = resolved.convert(data, simplify)
+            val fileUrl = members.convert.invoke(null, data, simplify)
             if (fileUrl.isNullOrBlank()) return TrackSource.NoSequence(null)
-            val path = resolved.readMotionPath(context, fileUrl, 0)
+            val path = members.readMotionPath.invoke(null, context, fileUrl, 0)
                 ?: return TrackSource.NoSequence(fileUrl)
             return TrackSource.Track(SportRecordParser.parse(simplify, path))
         }
@@ -78,7 +74,7 @@ internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
             // Never a SAM lambda here: R8 turns those into a synthetic class no keep rule
             // reaches, renames onResponse (the stub interface is compileOnly and thus
             // invisible to it), and the host's callback dies on AbstractMethodError.
-            invoke(startMs, endMs, object : IBaseResponseCallback {
+            invoke(null, startMs, endMs, object : IBaseResponseCallback {
                 override fun onResponse(errCode: Int, data: Any?) {
                     outcome = when {
                         errCode != 0 -> Result.failure(
@@ -112,13 +108,13 @@ internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
     }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        val summary = hostMethod<Unit>(
+        val summary = bridge.requireMethod<Unit>(
             label = "sportHistory#getRecordListByTime",
             pick = { singleOrNull(HostMethodData::isStatic) },
         ) {
             paramTypes(classOf<Long>(), classOf<Long>(), classOf<IBaseResponseCallback>())
             usingStrings = listOf("getRecordListByTime workoutList.size")
-        } ?: error("getRecordListByTime not resolved")
+        }
 
         val detailMarkerInners = bridge.findClass {
             matcher {
@@ -128,7 +124,7 @@ internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
         log.debug { "Request track detail data markers=${detailMarkerInners.map { it.name }}" }
 
         fun detailBuilderOf(innerName: String, requireReadHiHealthData: Boolean) =
-            hostMethod<Unit>(
+            bridge.method<Unit>(
                 label = "sportHistory#requestTrackDetailData",
                 pick = { singleOrNull(HostMethodData::isStatic) },
             ) {
@@ -141,11 +137,11 @@ internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
                 if (requireReadHiHealthData) addInvoke { name = "readHiHealthData" }
             }
 
-        val detail = detailMarkerInners.firstNotNullOfOrNull { detailBuilderOf(it.name, true) }
-            ?: detailMarkerInners.singleOrNull()?.name?.let { detailBuilderOf(it, false) }
-            ?: error("requestTrackDetailData not resolved")
+        val detail = (detailMarkerInners.firstNotNullOfOrNull { detailBuilderOf(it.name, true) }
+            ?: detailMarkerInners.singleOrNull()?.name?.let { detailBuilderOf(it, false) })
+            .orFail { "sportHistory#requestTrackDetailData" }
 
-        val convert = hostMethod<String>(
+        val convert = bridge.requireMethod<String>(
             label = "SportDataConvertUtil#convertHiDataToTrackData",
             pick = { singleOrNull(HostMethodData::isStatic) },
         ) {
@@ -154,15 +150,15 @@ internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
                 "should not enter this branch,do not set",
                 "Track_SportDataConvertUtil",
             )
-        } ?: error("convertHiDataToTrackData not resolved")
+        }
 
-        val readMotionPath = hostMethod<MotionPath>(
+        val readMotionPath = bridge.requireMethod<MotionPath>(
             label = "trackFile#readTemporaryMotionPath",
             pick = { singleOrNull(HostMethodData::isStatic) },
         ) {
             paramTypes(classOf<Context>(), classOf<String>(), classOf<Int>())
             usingStrings = listOf("readTemporaryMotionPath savePath is empty")
-        } ?: error("readTemporaryMotionPath not resolved")
+        }
 
         members = Members(summary, detail, convert, readMotionPath)
     }

@@ -1,6 +1,5 @@
 # Keep all xposed hook classes
 -keep class moe.evil.hwhh.xposed.** { *; }
--keep class moe.evil.hwhh.kdxref.** { *; }
 -keep class moe.evil.hwhh.shared.** { *; }
 
 # jadx runs as an on-device library: plugins are found via META-INF/services and
@@ -36,12 +35,14 @@
 -keep class com.highcapable.yukihookapi.** { *; }
 -dontwarn com.highcapable.yukihookapi.**
 
-# KavaRef - reflection-based member resolver
--keep class com.highcapable.kavaref.** { *; }
+# KavaRef - reflects on host classes, never on itself, so it shrinks like any library
 -dontwarn com.highcapable.kavaref.**
 
-# DexKit - native JNI + reflection
--keep class org.luckypray.dexkit.** { *; }
+# DexKit - JNI only reaches the classes declaring native methods (this is the AAR's own
+# consumer rule); results cross the boundary as flatbuffers byte arrays, not reflection
+-keepclasseswithmembers,includedescriptorclasses class org.luckypray.dexkit.** {
+    native <methods>;
+}
 -dontwarn org.luckypray.dexkit.**
 
 # Xposed framework classes (provided at runtime, not in APK)

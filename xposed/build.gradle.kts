@@ -62,7 +62,11 @@ kotlin {
 
 dependencies {
     implementation(project(":shared"))
-    api(project(":kdxref"))
+    api(platform(libs.kavaref.bom))
+    api(libs.kavaref.core)
+    api(libs.kavaref.android)
+    api(libs.kavaref.extension)
+    api(libs.dexkit)
     implementation(libs.androidx.core.ktx)
     compileOnly(libs.rovo89.xposed.api)
     compileOnly(project(":xbinterface"))

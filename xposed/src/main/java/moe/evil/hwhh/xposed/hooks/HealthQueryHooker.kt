@@ -9,22 +9,16 @@ import android.content.IntentFilter
 import android.os.Looper
 import android.util.SparseArray
 import androidx.core.util.size
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.hihealth.HiDataReadOption
 import com.huawei.hihealth.HiHealthData
-import com.huawei.hihealth.api.HiHealthApi
+import com.huawei.hihealth.api.HiHealthNativeApi
 import com.huawei.hihealth.data.listener.HiDataReadResultListener
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostMethod
-import moe.evil.hwhh.kdxref.describe
-import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
-import moe.evil.hwhh.kdxref.hostMethod
-import moe.evil.hwhh.kdxref.safeHook
 import moe.evil.hwhh.shared.DebugToggle
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.model.HealthQueryRequest
 import moe.evil.hwhh.xposed.model.HealthQueryResponse
 import moe.evil.hwhh.xposed.model.HealthSample
@@ -32,6 +26,12 @@ import moe.evil.hwhh.xposed.sportdata.exporter.ensureExportDir
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.HookApi
 import moe.evil.hwhh.xposed.utils.ifDebugPref
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethod
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.invoke
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
+import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -44,14 +44,13 @@ internal interface HealthQueryApi : HookApi {
 
 @OptIn(ExperimentalSerializationApi::class)
 internal object HealthQueryHooker : DexKitHooker<HealthQueryApi>() {
-    private const val API_CLASS = "com.huawei.hihealth.api.HiHealthNativeApi"
     private const val ACTION_QUERY = "moe.evil.hwhh.action.QUERY_HEALTH"
     private const val RESULT_ACCEPTED = -1
     private const val RESULT_REJECTED = 1
     private val log = HLog.of<HealthQueryHooker>()
     private val receiverRegistered = AtomicBoolean(false)
     private val json = Json
-    private var apiFactory: HostMethod<HiHealthApi>? = null
+    private var apiFactory: HostMethod<HiHealthNativeApi>? = null
     private val metadata by require { HealthMetadataHooker }
 
     override val providedApi = object : HealthQueryApi {
@@ -59,7 +58,7 @@ internal object HealthQueryHooker : DexKitHooker<HealthQueryApi>() {
             check(Looper.myLooper() != Looper.getMainLooper()) {
                 "Health query blocks for up to ${request.timeoutSec}s, refusing the main thread"
             }
-            val api = checkNotNull(apiFactory?.invoke(ctx.applicationContext)) {
+            val api = checkNotNull(apiFactory?.invoke(null, ctx.applicationContext)) {
                 "HiHealthNativeApi unavailable"
             }
             val option = HiDataReadOption().apply {
@@ -96,17 +95,16 @@ internal object HealthQueryHooker : DexKitHooker<HealthQueryApi>() {
     }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        apiFactory = hostMethod<HiHealthApi>("HiHealthNativeApi#getInstance") {
-            declaredClass = API_CLASS
-            returnType = API_CLASS
+        apiFactory = bridge.requireMethod("HiHealthNativeApi#getInstance") {
+            declaredClass(classOf<HiHealthNativeApi>())
             paramTypes(classOf<Context>())
-        } ?: return
+        }
 
         ifDebugPref(DebugToggle.HEALTH_QUERY) {
-            classOf<Instrumentation>().firstMethodOrNullLogged {
+            classOf<Instrumentation>().requireMethod {
                 name = "callApplicationOnCreate"
                 parameters(classOf<Application>())
-            }?.safeHook {
+            }.safeHook {
                 after {
                     val app = args(0).cast<Application?>() ?: return@after
                     if (!receiverRegistered.compareAndSet(false, true)) return@after

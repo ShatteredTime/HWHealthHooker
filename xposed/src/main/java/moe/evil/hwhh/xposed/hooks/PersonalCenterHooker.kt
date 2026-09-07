@@ -2,17 +2,7 @@ package moe.evil.hwhh.xposed.hooks
 
 import android.content.Context
 import android.view.View
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.ui.main.stories.userprofile.activity.PersonalCenterFragment
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostField
-import moe.evil.hwhh.kdxref.HostMethod
-import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
-import moe.evil.hwhh.kdxref.hostField
-import moe.evil.hwhh.kdxref.hostMethod
-import moe.evil.hwhh.kdxref.orWarnEmpty
-import moe.evil.hwhh.kdxref.safeHook
-import moe.evil.hwhh.kdxref.toClassOrLog
 import moe.evil.hwhh.shared.DebugToggle
 import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
@@ -21,11 +11,24 @@ import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
 import moe.evil.hwhh.xposed.utils.collapseView
 import moe.evil.hwhh.xposed.utils.ifDebugPref
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.HostField
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethod
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.getOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.invokeOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.method
+import moe.evil.hwhh.xposed.utils.wrapper.orWarnEmpty
+import moe.evil.hwhh.xposed.utils.wrapper.requireClass
+import moe.evil.hwhh.xposed.utils.wrapper.requireField
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
+import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.lang.reflect.Modifier
 
 @HookRoot(order = 2)
 object PersonalCenterHooker : DexKitBaseHooker() {
     private const val KAKA_BOTTOM_RED_DOT_POSITION = 4
+    private const val KAKA_CHECK_IN_BOTTOM_RED_DOT_POSITION = 1024
     private const val MESSAGE_BOTTOM_RED_DOT_POSITION = 1
     private const val KAKA_PENDING_ID = "kaka_to_be_collected_text"
     private const val SCROLL_PACKAGE = "com.huawei.ui.main.stories.userprofile.scroll"
@@ -44,34 +47,30 @@ object PersonalCenterHooker : DexKitBaseHooker() {
 
     private val log = HLog.of<PersonalCenterHooker>()
 
-    private var lookups: Lookups? = null
+    private lateinit var lookups: Lookups
 
     @Volatile
     private var kakaPendingId: Int? = null
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        val customHeadViewClazz = context(this@PersonalCenterHooker) {
-            PersonalCenterHooker.CUSTOM_HEAD_VIEW.toClassOrLog()
-        } ?: return
-        val personalCenterFragmentClazz = context(this@PersonalCenterHooker) {
-            PersonalCenterHooker.PERSONAL_CENTER_FRAGMENT.toClassOrLog()
-        } ?: return
+        val customHeadViewClazz = bridge.requireClass(CUSTOM_HEAD_VIEW)
+        val personalCenterFragmentClazz = bridge.requireClass(PERSONAL_CENTER_FRAGMENT)
 
-        val kakaRedDot = hostMethod<Boolean>("KakaManager#getKakaTaskRedDot") {
+        val kakaRedDot = bridge.requireMethod<Boolean>("KakaManager#getKakaTaskRedDot") {
             usingStrings = listOf("getKakaTaskRedDot enter")
             paramCount(0)
-        } ?: return
-        val kakaManagerOf = hostMethod<Any>("KakaManager#instance") {
+        }
+        val kakaManagerOf = bridge.requireMethod<Any>("KakaManager#instance") {
             declaredClass(kakaRedDot.owner)
             returnType(kakaRedDot.owner)
             paramTypes(classOf<Context>())
-        } ?: return
-        val bottomRedDotMap = hostField<Map<*, *>>(
+        }
+        val bottomRedDotMap = bridge.requireField<Map<*, *>>(
             label = "PersonalCenterFragment#bottomRedDotMap",
             inPackage = ACTIVITY_PACKAGE,
         ) {
             declaredClass(personalCenterFragmentClazz)
-        } ?: return
+        }
 
         val chvWithFindView = bridge.findMethod {
             searchPackages(SCROLL_PACKAGE)
@@ -100,7 +99,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
             }.mapNotNullTo(HashSet()) {
                 it.className.takeIf { name -> name != PERSONAL_CENTER_FRAGMENT }
             },
-            appContextOf = hostMethod<Context>("BaseApplication#getContext") {
+            appContextOf = bridge.method<Context>("BaseApplication#getContext") {
                 declaredClass = BASE_APPLICATION
                 name = "getContext"
                 paramTypes()
@@ -108,7 +107,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
         )
 
         // kaka visibility setter on CustomHeadView (dexkit-resolved)
-        hostMethod<Unit>(
+        bridge.method<Unit>(
             label = "CustomHeadView#kakaVisibility",
             inPackage = SCROLL_PACKAGE,
             pick = { singleOrNull { it.name !in chvWithFindView } },
@@ -127,7 +126,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
         }
 
         // kaka text setter on CustomHeadView (dexkit-resolved)
-        hostMethod<Unit>("CustomHeadView#kakaText", inPackage = SCROLL_PACKAGE) {
+        bridge.method<Unit>("CustomHeadView#kakaText", inPackage = SCROLL_PACKAGE) {
             declaredClass(customHeadViewClazz)
             paramTypes(classOf<String>())
             addInvoke { name = "getText" }
@@ -141,7 +140,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
         }
 
         // unread message count setter (dexkit-resolved)
-        hostMethod<Any>("PersonalCenterFragment#setUnreadMessageNum", ACTIVITY_PACKAGE) {
+        bridge.method<Any>("PersonalCenterFragment#setUnreadMessageNum", ACTIVITY_PACKAGE) {
             declaredClass(personalCenterFragmentClazz)
             paramTypes(classOf<Int>())
             usingStrings = listOf("Enter setUnreadMessageNum unreadMessageNum:")
@@ -160,7 +159,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
         }
 
         // kaka bottom red dot updater (dexkit-resolved)
-        hostMethod<Unit>("PersonalCenterFragment#kakaRedDotUpdater", ACTIVITY_PACKAGE) {
+        bridge.method<Unit>("PersonalCenterFragment#kakaRedDotUpdater", ACTIVITY_PACKAGE) {
             declaredClass(personalCenterFragmentClazz)
             addInvoke { name = "setBottomRedDotVisibility" }
             addInvoke { name = "cancelBottomRedDotVisible" }
@@ -174,10 +173,21 @@ object PersonalCenterHooker : DexKitBaseHooker() {
             }
         }
 
+        // kaka check-in bottom red dot (dexkit-resolved)
+        bridge.method<Unit>("PersonalCenterFragment#kakaCheckInRedDot", ACTIVITY_PACKAGE) {
+            declaredClass(personalCenterFragmentClazz)
+            paramTypes(classOf<Boolean>())
+            usingStrings = listOf("updateKakaCheckRed")
+        }?.safeHook {
+            after {
+                cancelBottomRedDot(instanceOrNull, KAKA_CHECK_IN_BOTTOM_RED_DOT_POSITION)
+            }
+        }
+
         ifDebugPref(DebugToggle.RED_DOT) {
             fun traceBottomRedDotMutation(host: Any?, action: String, position: Int) {
                 val map = getBottomRedDotMap(host)
-                val callerNames = lookups?.redDotCallerClassNames.orEmpty()
+                val callerNames = lookups.redDotCallerClassNames
                 val stack = Throwable()
                     .stackTrace
                     .filter {
@@ -190,7 +200,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
                 log.debug { "Bottom red dot action=$action position=$position map=$map stack=$stack" }
             }
 
-            personalCenterFragmentClazz.firstMethodOrNullLogged {
+            personalCenterFragmentClazz.method {
                 name = "setBottomRedDotVisibility"
                 parameters(classOf<Int>())
             }?.safeHook {
@@ -202,7 +212,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
                 }
             }
 
-            personalCenterFragmentClazz.firstMethodOrNullLogged {
+            personalCenterFragmentClazz.method {
                 name = "cancelBottomRedDotVisible"
                 parameters(classOf<Int>())
             }?.safeHook {
@@ -227,14 +237,12 @@ object PersonalCenterHooker : DexKitBaseHooker() {
     }
 
     private fun hasKakaRedDot(): Boolean {
-        val l = lookups ?: return false
-        val context = l.appContextOf?.invokeQuietly() ?: return false
-        val manager = l.kakaManagerOf.invokeQuietly(context) ?: return false
-        return l.kakaRedDot.on(manager).invokeQuietly() == true
+        val context = lookups.appContextOf?.invokeOrNull(null) ?: return false
+        val manager = lookups.kakaManagerOf.invokeOrNull(null, context) ?: return false
+        return lookups.kakaRedDot.invokeOrNull(manager) == true
     }
 
-    private fun getBottomRedDotMap(host: Any?) =
-        host?.let { lookups?.bottomRedDotMap?.on(it) }
+    private fun getBottomRedDotMap(host: Any?) = host?.let { lookups.bottomRedDotMap.getOrNull(it) }
 
     private fun cancelBottomRedDot(host: Any?, position: Int) {
         (host as? PersonalCenterFragment)?.cancelBottomRedDotVisible(position)

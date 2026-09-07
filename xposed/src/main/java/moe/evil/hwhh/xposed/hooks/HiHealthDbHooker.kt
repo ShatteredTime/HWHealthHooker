@@ -1,16 +1,18 @@
 package moe.evil.hwhh.xposed.hooks
 
 import android.database.Cursor
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.hihealthservice.db.helper.HiHealthDBHelper
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostMethod
-import moe.evil.hwhh.kdxref.HostMethodData
-import moe.evil.hwhh.kdxref.describe
-import moe.evil.hwhh.kdxref.hostMethod
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.HookApi
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethod
+import moe.evil.hwhh.xposed.utils.wrapper.HostMethodData
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.invokeOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.optionally
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import java.util.concurrent.ConcurrentHashMap
 
@@ -23,7 +25,6 @@ internal data class HiHealthTable(val db: String, val name: String, val createSq
 }
 
 internal interface HiHealthDbApi : HookApi {
-    val isAvailable: Boolean
     fun account(): HiHealthAccount?
     fun tables(): Result<List<HiHealthTable>>
     fun localTypes(): Result<List<Int>>
@@ -66,11 +67,7 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
         val account: AccountMembers?,
     )
 
-    @Volatile
-    private var members: Members? = null
-
-    private val isAvailable
-        get() = members != null
+    private lateinit var members: Members
 
     @Volatile
     private var tableCache: List<HiHealthTable>? = null
@@ -84,11 +81,9 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
     private val databases = ConcurrentHashMap<String, SQLiteDatabase>()
 
     override val providedApi = object : HiHealthDbApi {
-        override val isAvailable get() = this@HiHealthDbHooker.isAvailable
-
         override fun account() = accountCache
             ?: synchronized(this@HiHealthDbHooker) {
-                accountCache ?: members?.account?.let { resolved ->
+                accountCache ?: members.account?.let { resolved ->
                     val huid = resolved.huid()?.takeIf(String::isNotEmpty) ?: return@let null
                     val userId = resolved.userId(huid)?.takeIf { it > 0 } ?: return@let null
                     HiHealthAccount(userId, resolved.clientIds(userId))
@@ -98,11 +93,10 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
         override fun tables() = tableCache?.let { Result.success(it) }
             ?: synchronized(this@HiHealthDbHooker) {
                 tableCache?.let { Result.success(it) } ?: runCatching {
-                    val resolved = checkNotNull(members) { "Database API unavailable" }
                     buildList {
                         val fingerprints = hashSetOf<Set<String>>()
                         listOf(MAIN_DB, SENSITIVE_DB).forEach { db ->
-                            val rows = resolved.withCursor(
+                            val rows = members.withCursor(
                                 db,
                                 "SELECT name, sql FROM sqlite_master WHERE type='table'",
                             ) { cursor ->
@@ -134,7 +128,6 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
         override fun localTypes() = typeCache?.let { Result.success(it) }
             ?: synchronized(this@HiHealthDbHooker) {
                 typeCache?.let { Result.success(it) } ?: runCatching {
-                    checkNotNull(members) { "Database API unavailable" }
                     val account = checkNotNull(account()) { "Current account not resolved" }
                     val out = sortedSetOf<Int>()
                     tables().getOrThrow().forEach { table ->
@@ -160,10 +153,9 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
             column: String,
             account: HiHealthAccount?,
         ): Result<List<Int>> = runCatching {
-            val resolved = checkNotNull(members) { "Database API unavailable" }
             if (column !in table.columns) emptyList()
             else checkNotNull(
-                resolved.withCursor(
+                members.withCursor(
                     table.db,
                     "SELECT DISTINCT $column FROM ${table.name}${table.filterBy(account)} " +
                             "ORDER BY $column",
@@ -182,10 +174,9 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
             second: String,
             account: HiHealthAccount?,
         ): Result<List<IntArray>> = runCatching {
-            val resolved = checkNotNull(members) { "Database API unavailable" }
             if (first !in table.columns || second !in table.columns) emptyList()
             else checkNotNull(
-                resolved.withCursor(
+                members.withCursor(
                     table.db,
                     "SELECT DISTINCT $first, $second FROM ${table.name}${table.filterBy(account)}",
                 ) { cursor ->
@@ -202,13 +193,12 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
 
         override fun select(sql: String, db: String): Result<List<Map<String, String?>>> =
             runCatching {
-                val resolved = checkNotNull(members) { "Database API unavailable" }
                 val statement = sql.trim().removeSuffix(";").trim()
                 check(statement.startsWith("SELECT", ignoreCase = true) && ';' !in statement) {
                     "Rejected, single SELECT only: $sql"
                 }
                 checkNotNull(
-                    resolved.withCursor(db, statement) { cursor ->
+                    members.withCursor(db, statement) { cursor ->
                         val names = Array(cursor.columnCount, cursor::getColumnName)
                         buildList(cursor.count) {
                             while (cursor.moveToNext()) {
@@ -224,8 +214,8 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
             }
     }
 
-    private fun singletonOf(role: String, hosted: HostMethod<*>) =
-        hostMethod<Any>("$role#instance", pick = { singleOrNull(HostMethodData::isStatic) }) {
+    private fun HostBridge.singletonOf(role: String, hosted: HostMethod<*>) =
+        requireMethod<Any>("$role#instance", pick = { singleOrNull(HostMethodData::isStatic) }) {
             declaredClass(hosted.owner)
             returnType(hosted.owner)
             paramTypes()
@@ -233,62 +223,64 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
 
     override fun onHookWithDexKit(bridge: HostBridge) {
         val helper = classOf<HiHealthDBHelper>()
-        val mainFactory = hostMethod<HiHealthDBHelper>(
+        val mainFactory = bridge.requireMethod<HiHealthDBHelper>(
             label = "HiHealthDBHelper#main",
             pick = { singleOrNull { it.isStatic && it.isPublic } },
         ) {
             declaredClass(helper)
             paramTypes()
-        } ?: return
-        val namedFactory = hostMethod<HiHealthDBHelper>(
+        }
+        val namedFactory = bridge.requireMethod<HiHealthDBHelper>(
             label = "HiHealthDBHelper#named",
             pick = { singleOrNull { it.isStatic && it.isPublic } },
         ) {
             declaredClass(helper)
             paramTypes(classOf<String>())
-        } ?: return
+        }
 
-        val account = run {
-            val huidMethod = hostMethod<String>(
+        val account = optionally("Account resolution") {
+            val huidMethod = bridge.requireMethod<String>(
                 "userStore#huid",
-                pick = { singleOrNull(HostMethodData::isPublic) }) {
+                pick = { singleOrNull(HostMethodData::isPublic) },
+            ) {
                 usingStrings = listOf("getStringHuid() from DB")
                 paramTypes()
-            } ?: return@run null
-            val userIdMethod =
-                hostMethod<Int>(
-                    "userInfo#userId",
-                    pick = { singleOrNull(HostMethodData::isPublic) }) {
-                    usingStrings = listOf("queryUserInfoForUserId")
-                    paramTypes(classOf<String>(), classOf<Int>())
-                } ?: return@run null
-            val clientIdsMethod = hostMethod<List<*>>(
+            }
+            val userIdMethod = bridge.requireMethod<Int>(
+                "userInfo#userId",
+                pick = { singleOrNull(HostMethodData::isPublic) },
+            ) {
+                usingStrings = listOf("queryUserInfoForUserId")
+                paramTypes(classOf<String>(), classOf<Int>())
+            }
+            val clientIdsMethod = bridge.requireMethod<List<*>>(
                 label = "clientStore#clientIds",
                 pick = { singleOrNull(HostMethodData::isPublic) },
             ) {
                 usingStrings = listOf("user_id =? and device_id >=? and app_id >=? ")
                 paramTypes(classOf<Int>())
-            } ?: return@run null
+            }
 
-            val userStoreOf = singletonOf("userStore", huidMethod) ?: return@run null
-            val userInfoOf = singletonOf("userInfo", userIdMethod) ?: return@run null
-            val clientStoreOf = singletonOf("clientStore", clientIdsMethod) ?: return@run null
+            val userStoreOf = bridge.singletonOf("userStore", huidMethod)
+            val userInfoOf = bridge.singletonOf("userInfo", userIdMethod)
+            val clientStoreOf = bridge.singletonOf("clientStore", clientIdsMethod)
 
             AccountMembers(
-                huid = { huidMethod.on(userStoreOf.invokeQuietly()).invokeQuietly() },
+                huid = { userStoreOf.invokeOrNull(null)?.let { huidMethod.invokeOrNull(it) } },
                 userId = { huid ->
-                    userIdMethod.on(userInfoOf.invokeQuietly()).invokeQuietly(huid, 0)
+                    userInfoOf.invokeOrNull(null)?.let { userIdMethod.invokeOrNull(it, huid, 0) }
                 },
                 clientIds = { userId ->
-                    clientIdsMethod.on(clientStoreOf.invokeQuietly()).invokeQuietly(userId)
+                    clientStoreOf.invokeOrNull(null)
+                        ?.let { clientIdsMethod.invokeOrNull(it, userId) }
                         ?.filterIsInstance<Int>()?.toHashSet().orEmpty()
                 },
             )
-        }.also { if (it == null) log.warn { "Account resolution unavailable" } }
+        }
 
         members = Members(mainFactory, namedFactory, account)
 
-        log.info { "Ready, account=${account != null}" }
+        log.debug { "Ready, account=${account != null}" }
     }
 
     private val HiHealthTable.typeColumn
@@ -311,9 +303,9 @@ internal object HiHealthDbHooker : DexKitHooker<HiHealthDbApi>() {
         ?: synchronized(this@HiHealthDbHooker) {
             databases[name]?.takeIf { it.isOpen() } ?: runCatching {
                 val helper = if (name == SENSITIVE_DB) {
-                    openNamed.invokeQuietly(name)
+                    openNamed.invokeOrNull(null, name)
                 } else {
-                    openMain.invokeQuietly()
+                    openMain.invokeOrNull(null)
                 }
                 checkNotNull(helper) { "no HiHealthDBHelper" }
                     .getWritableDatabase()

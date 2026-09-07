@@ -1,10 +1,10 @@
 package moe.evil.hwhh.xposed.hooks.metadata
 
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.hihealth.HiDataReadOption
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
-import moe.evil.hwhh.kdxref.safeHook
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.method
+import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.util.concurrent.ConcurrentHashMap
 
 internal interface HealthAliasApi : MetadataSourceApi {
@@ -34,23 +34,23 @@ internal object HealthAliasHooker : MetaDataBaseHooker<HealthAliasApi>() {
 
     override fun onHookWithDexKit(bridge: HostBridge) {
         val option = classOf<HiDataReadOption>()
-        val resolvers = listOfNotNull(
-            option.firstMethodOrNullLogged {
+        val setters = listOfNotNull(
+            option.method {
                 name = "setType"
                 parameters(classOf<IntArray>())
             },
-            option.firstMethodOrNullLogged {
+            option.method {
                 name = "setType"
                 parameters(classOf<IntArray>(), classOf<Array<String>>(), classOf<Int>())
             },
-            option.firstMethodOrNullLogged {
+            option.method {
                 name = "setConstantsKey"
                 parameters(classOf<Array<String>>())
             },
         )
-        check(resolvers.isNotEmpty()) { "No supported HiDataReadOption metadata setter was resolved" }
-        resolvers.forEach { resolver ->
-            resolver.safeHook {
+        check(setters.isNotEmpty()) { "No supported HiDataReadOption metadata setter was resolved" }
+        setters.forEach { setter ->
+            setter.safeHook {
                 after {
                     val readOption = instance<HiDataReadOption>()
                     if (readOption.javaClass.name == SPORT_STAT_OPTION) return@after

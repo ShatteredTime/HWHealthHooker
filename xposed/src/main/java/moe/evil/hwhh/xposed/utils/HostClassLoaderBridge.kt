@@ -1,8 +1,8 @@
 package moe.evil.hwhh.xposed.utils
 
 import android.annotation.SuppressLint
-import com.highcapable.kavaref.extension.classOf
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
 import java.lang.reflect.Field
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean

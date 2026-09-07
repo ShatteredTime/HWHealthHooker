@@ -1,8 +1,8 @@
 package moe.evil.hwhh.xposed.resolvers
 
 import android.util.Xml
-import moe.evil.hwhh.kdxref.describe
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
 

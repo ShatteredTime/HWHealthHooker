@@ -3,19 +3,19 @@ package moe.evil.hwhh.xposed.hooks
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import com.highcapable.kavaref.extension.classOf
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostField
-import moe.evil.hwhh.kdxref.firstFieldOrNullLogged
-import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
-import moe.evil.hwhh.kdxref.hostMethod
-import moe.evil.hwhh.kdxref.safeHook
-import moe.evil.hwhh.kdxref.toClassOrLog
 import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
 import moe.evil.hwhh.xposed.utils.collapseView
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.HostField
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.getOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.method
+import moe.evil.hwhh.xposed.utils.wrapper.requireClass
+import moe.evil.hwhh.xposed.utils.wrapper.requireField
+import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.util.concurrent.ConcurrentHashMap
 
 @HookRoot(order = 0)
@@ -27,33 +27,25 @@ object HomeHooker : DexKitBaseHooker() {
     private var dailyMomentCardId: Int? = null
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        // bottom recommend card classes
-        val operationCardDataClazz = context(this@HomeHooker) {
-            "com.huawei.ui.homehealth.operationcard.OperationCardData".toClassOrLog()
-        } ?: return
-        val operationCardViewHolderClazz = context(this@HomeHooker) {
-            "com.huawei.ui.homehealth.operationcard.OperationCardViewHolder".toClassOrLog()
-        } ?: return
-        // function menu card classes
-        val functionMenuCardDataClazz = context(this@HomeHooker) {
-            "com.huawei.ui.homehealth.FunctionMenuCardData".toClassOrLog()
-        } ?: return
-        val functionMenuViewHolderClazz = context(this@HomeHooker) {
-            $$"com.huawei.ui.homehealth.FunctionMenuCardData$FunctionMenuViewHolder".toClassOrLog()
-        } ?: return
-        // daily moment card classes
-        val dailyMomentCardAdapterClazz = context(this@HomeHooker) {
-            "com.huawei.health.functionsetcard.dailymoment.DailyMomentCardAdapter".toClassOrLog()
-        } ?: return
-        val functionSetViewAdapterClazz = context(this@HomeHooker) {
-            "com.huawei.health.functionsetcard.FunctionSetViewAdapter".toClassOrLog()
-        } ?: return
-        val recyclerViewHolderClazz = context(this@HomeHooker) {
-            $$"androidx.recyclerview.widget.RecyclerView$ViewHolder".toClassOrLog()
-        } ?: return
+        val operationCardDataClazz =
+            bridge.requireClass("com.huawei.ui.homehealth.operationcard.OperationCardData")
+        val operationCardViewHolderClazz =
+            bridge.requireClass("com.huawei.ui.homehealth.operationcard.OperationCardViewHolder")
+        val functionMenuCardDataClazz =
+            bridge.requireClass("com.huawei.ui.homehealth.FunctionMenuCardData")
+        val functionMenuViewHolderClazz = bridge.requireClass(
+            $$"com.huawei.ui.homehealth.FunctionMenuCardData$FunctionMenuViewHolder",
+        )
+        val dailyMomentCardAdapterClazz = bridge.requireClass(
+            "com.huawei.health.functionsetcard.dailymoment.DailyMomentCardAdapter",
+        )
+        val functionSetViewAdapterClazz =
+            bridge.requireClass("com.huawei.health.functionsetcard.FunctionSetViewAdapter")
+        val recyclerViewHolderClazz =
+            bridge.requireClass($$"androidx.recyclerview.widget.RecyclerView$ViewHolder")
 
         // very bottom ads
-        operationCardDataClazz.firstMethodOrNullLogged {
+        operationCardDataClazz.method {
             name = "getCardViewHolder"
             parameters(classOf<ViewGroup>(), classOf<LayoutInflater>())
         }?.safeHook {
@@ -63,7 +55,7 @@ object HomeHooker : DexKitBaseHooker() {
         }
 
         // bottom recommend card visibility setter (dexkit-resolved)
-        hostMethod<Unit>(
+        bridge.method<Unit>(
             label = "OperationCardViewHolder#visibility",
             inPackage = "com.huawei.ui.homehealth.operationcard",
         ) {
@@ -79,7 +71,7 @@ object HomeHooker : DexKitBaseHooker() {
         }
 
         // ads between three-circle data and health data
-        functionMenuCardDataClazz.firstMethodOrNullLogged {
+        functionMenuCardDataClazz.method {
             name = "getCardViewHolder"
             parameters(classOf<ViewGroup>(), classOf<LayoutInflater>())
         }?.safeHook {
@@ -89,7 +81,7 @@ object HomeHooker : DexKitBaseHooker() {
         }
 
         // function menu card visibility setter (dexkit-resolved)
-        hostMethod<Unit>(
+        bridge.method<Unit>(
             label = "FunctionMenuViewHolder#visibility",
             inPackage = "com.huawei.ui.homehealth",
         ) {
@@ -105,7 +97,7 @@ object HomeHooker : DexKitBaseHooker() {
         }
 
         // ads in health data — daily moment card create holder (dexkit-resolved)
-        hostMethod<Any>(
+        bridge.method<Any>(
             label = "DailyMomentCardAdapter#createHolder",
             inPackage = "com.huawei.health.functionsetcard.dailymoment",
         ) {
@@ -117,7 +109,7 @@ object HomeHooker : DexKitBaseHooker() {
             }
         }
 
-        functionSetViewAdapterClazz.firstMethodOrNullLogged {
+        functionSetViewAdapterClazz.method {
             name = "onBindViewHolder"
             parameters(recyclerViewHolderClazz, classOf<Int>())
         }?.safeHook {
@@ -142,14 +134,12 @@ object HomeHooker : DexKitBaseHooker() {
         checkNotNull(any) { "extractItemView: argument is null" }
         if (any is View) return any
         val field = itemViewFields.getOrPut(any.javaClass) {
-            checkNotNull(
-                any.javaClass.firstFieldOrNullLogged(classOf<View>()) {
-                    name = "itemView"
-                    superclass()
-                }
-            ) { "extractItemView: itemView not found in ${any.javaClass.name}" }
+            any.javaClass.requireField(classOf<View>()) {
+                name = "itemView"
+                superclass()
+            }
         }
-        return checkNotNull(field.on(any)) {
+        return checkNotNull(field.getOrNull(any)) {
             "extractItemView: itemView is null in ${any.javaClass.name}"
         }
     }

@@ -4,15 +4,14 @@ import com.huawei.hwfoundationmodel.trackmodel.MotionPath
 import com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify
 import com.huawei.hwfoundationmodel.trackmodel.TimeSequence
 import com.huawei.hwfoundationmodel.trackmodel.ValueSequence
-import moe.evil.hwhh.kdxref.fieldBySerializedName
-import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.model.SportRecord.GpsPoint
 import moe.evil.hwhh.xposed.model.SportRecord.Summary
 import moe.evil.hwhh.xposed.model.SportRecord.TimedFloat
 import moe.evil.hwhh.xposed.model.SportRecord.TimedShort
+import moe.evil.hwhh.xposed.utils.wrapper.fieldBySerializedName
+import moe.evil.hwhh.xposed.utils.wrapper.get
 
 object SportRecordParser {
-    private val log = HLog.of<SportRecordParser>()
     private const val INVALID_SENTINEL_LAT = 90.0
     private const val INVALID_SENTINEL_LON = -80.0
     private const val SPEED_RAW_PER_MS = 10f
@@ -83,11 +82,7 @@ object SportRecordParser {
         orEmpty().mapNotNull { e -> value(e)?.let { TimedFloat(e.acquireTime(), it) } }
 
     private fun <E : Any> List<E>.numberReader(serializedName: String): ((E) -> Number?)? {
-        val sample = firstOrNull() ?: return null
-        val field = sample.javaClass.fieldBySerializedName(serializedName) ?: run {
-            log.warn { "SerializedName($serializedName) gone from ${sample.javaClass.name}" }
-            return null
-        }
+        val field = firstOrNull()?.javaClass?.fieldBySerializedName(serializedName) ?: return null
         return { element -> field.get(element) as? Number }
     }
 

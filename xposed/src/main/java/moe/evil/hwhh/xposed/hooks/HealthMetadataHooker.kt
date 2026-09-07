@@ -1,8 +1,7 @@
 package moe.evil.hwhh.xposed.hooks
 
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.describe
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.shared.model.HealthCategory
 import moe.evil.hwhh.xposed.hooks.metadata.HealthAliasHooker
 import moe.evil.hwhh.xposed.hooks.metadata.HealthMetaDataDbHooker
@@ -18,6 +17,7 @@ import moe.evil.hwhh.xposed.model.NameSource
 import moe.evil.hwhh.xposed.model.TypeOrigin
 import moe.evil.hwhh.xposed.utils.DexKitHooker
 import moe.evil.hwhh.xposed.utils.HookApi
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 
 internal interface HealthMetadataApi : HookApi {
     fun resolveAll(types: Collection<Int>): Result<Map<Int, HealthMetadata>>

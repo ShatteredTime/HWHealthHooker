@@ -3,8 +3,8 @@ package moe.evil.hwhh.xposed.sportdata.exporter
 import android.content.Context
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import moe.evil.hwhh.kdxref.describe
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.fit.FitInspector
 import moe.evil.hwhh.xposed.hooks.SportHistoryApi
 import moe.evil.hwhh.xposed.hooks.TrackSource

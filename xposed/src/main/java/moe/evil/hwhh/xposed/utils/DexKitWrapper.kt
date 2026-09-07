@@ -2,20 +2,19 @@ package moe.evil.hwhh.xposed.utils
 
 import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
 import com.highcapable.yukihookapi.hook.param.PackageParam
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostBridgeOwner
-import moe.evil.hwhh.kdxref.describe
 import moe.evil.hwhh.shared.HookFeature
 import moe.evil.hwhh.shared.PREFS_NAME
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.HOOKER_EDGES
 import moe.evil.hwhh.xposed.hookRootOf
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 
 interface HookApi
 
 data object NoApi : HookApi
 
-abstract class DexKitHooker<out A : HookApi> : YukiBaseHooker(), HostBridgeOwner {
+abstract class DexKitHooker<out A : HookApi> : YukiBaseHooker() {
     private enum class State {
         NEW,
         LOADING,
@@ -40,8 +39,7 @@ abstract class DexKitHooker<out A : HookApi> : YukiBaseHooker(), HostBridgeOwner
 
     final override fun onHook() {
         hookResult = runCatching {
-            dispatchHook(requireHostBridge())
-            log.debug { "Hooker ${javaClass.simpleName} executed onHook successfully" }
+            dispatchHook(checkNotNull(bridge) { "HostBridge is not available (out of scope)" })
         }
     }
 
@@ -95,11 +93,6 @@ abstract class DexKitHooker<out A : HookApi> : YukiBaseHooker(), HostBridgeOwner
             this.bridge = null
         }
     }
-
-    override val hostLoader get() = appClassLoader
-
-    override fun requireHostBridge() =
-        bridge ?: error("HostBridge is not available (out of scope)")
 
     class DexKitScope internal constructor(
         private val param: PackageParam,
@@ -172,6 +165,7 @@ abstract class DexKitHooker<out A : HookApi> : YukiBaseHooker(), HostBridgeOwner
                     onSuccess = {
                         hooker.markReady()
                         loaded += hooker
+                        log.debug { "Hooker ${hooker.key} ready" }
                         true
                     },
                     onFailure = { e ->

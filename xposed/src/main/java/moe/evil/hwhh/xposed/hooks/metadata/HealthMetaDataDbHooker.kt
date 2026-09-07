@@ -1,7 +1,7 @@
 package moe.evil.hwhh.xposed.hooks.metadata
 
-import moe.evil.hwhh.kdxref.HostBridge
 import moe.evil.hwhh.xposed.hooks.HiHealthDbHooker
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 
 internal interface HealthMetadataDbApi : MetadataSourceApi {
     fun snapshot(): Result<DbMetadataSnapshot>
@@ -47,7 +47,5 @@ internal object HealthMetaDataDbHooker :
             }
     }
 
-    override fun onHookWithDexKit(bridge: HostBridge) {
-        check(db.isAvailable) { "HiHealthDbHooker is unavailable" }
-    }
+    override fun onHookWithDexKit(bridge: HostBridge) = Unit
 }

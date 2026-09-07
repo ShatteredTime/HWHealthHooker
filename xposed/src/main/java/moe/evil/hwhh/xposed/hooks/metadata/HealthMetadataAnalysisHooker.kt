@@ -1,12 +1,12 @@
 package moe.evil.hwhh.xposed.hooks.metadata
 
 import kotlinx.serialization.json.Json
-import moe.evil.hwhh.kdxref.HostBridge
 import moe.evil.hwhh.shared.AnalysisPrefs
 import moe.evil.hwhh.shared.PREFS_NAME
 import moe.evil.hwhh.shared.hostBuildTag
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.model.AnalyzedNames
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 
 internal interface HealthMetadataAnalysisApi : MetadataSourceApi {
     fun snapshot(): AnalyzedNames?

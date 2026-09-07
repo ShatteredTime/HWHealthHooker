@@ -1,8 +1,8 @@
 package moe.evil.hwhh.xposed.hooks.metadata
 
-import moe.evil.hwhh.kdxref.HostBridge
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.utils.DexKitHooker
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 
 internal abstract class MetaDataBaseHooker<A : MetadataSourceApi>(
     protected val isMajor: Boolean = true,

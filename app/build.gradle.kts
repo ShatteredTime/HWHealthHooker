@@ -23,8 +23,8 @@ android {
     defaultConfig {
         applicationId = "moe.evil.hwhh"
         minSdk = 36
-        versionCode = 5
-        versionName = "5"
+        versionCode = 7
+        versionName = "1.7.0"
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
         ndk {
             //noinspection ChromeOsAbiSupport
@@ -55,6 +55,17 @@ android {
 
     androidResources {
         additionalParameters += listOf("--package-id", "0x64", "--allow-reserved-package-id")
+    }
+
+    packaging {
+        resources {
+            excludes += setOf(
+                "clst/**",
+                "META-INF/**/LICENSE*",
+                "**/*.kotlin_builtins",
+                "DebugProbesKt.bin",
+            )
+        }
     }
 }
 

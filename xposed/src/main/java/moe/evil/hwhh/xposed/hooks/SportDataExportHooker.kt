@@ -3,20 +3,13 @@ package moe.evil.hwhh.xposed.hooks
 import android.app.Activity
 import android.os.Bundle
 import android.view.View
-import com.highcapable.kavaref.extension.classOf
 import com.huawei.hwfoundationmodel.trackmodel.MotionPath
 import com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify
 import com.huawei.ui.commonui.titlebar.CustomTitleBar
-import moe.evil.hwhh.kdxref.HostBridge
-import moe.evil.hwhh.kdxref.HostField
-import moe.evil.hwhh.kdxref.describe
-import moe.evil.hwhh.kdxref.firstMethodOrNullLogged
-import moe.evil.hwhh.kdxref.hostField
-import moe.evil.hwhh.kdxref.safeHook
-import moe.evil.hwhh.kdxref.toClassOrLog
 import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.shared.log.HLog
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.R
 import moe.evil.hwhh.xposed.model.SportRecordExportOutcome
 import moe.evil.hwhh.xposed.model.SportRecordParser
@@ -28,6 +21,14 @@ import moe.evil.hwhh.xposed.utils.ShareOutcome
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
 import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
+import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
+import moe.evil.hwhh.xposed.utils.wrapper.HostField
+import moe.evil.hwhh.xposed.utils.wrapper.classOf
+import moe.evil.hwhh.xposed.utils.wrapper.getOrNull
+import moe.evil.hwhh.xposed.utils.wrapper.requireClass
+import moe.evil.hwhh.xposed.utils.wrapper.requireField
+import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
+import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.io.File
 import kotlin.concurrent.thread
 
@@ -37,25 +38,30 @@ object SportDataExportHooker : DexKitBaseHooker() {
     private const val TRACK_DETAIL_PACKAGE = "com.huawei.healthcloud.plugintrack.ui.activity"
     private val log = HLog.of<SportDataExportHooker>()
     private val commonUi by require { CommonUIHooker }
-    private var simplifyField: HostField<MotionPathSimplify>? = null
-    private var motionPathField: HostField<MotionPath>? = null
+
+    private class Members(
+        val simplify: HostField<MotionPathSimplify>,
+        val motionPath: HostField<MotionPath>,
+    )
+
+    private lateinit var members: Members
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        val trackDetailClazz = context(this@SportDataExportHooker) {
-            "com.huawei.healthcloud.plugintrack.ui.activity.TrackDetailActivity".toClassOrLog()
-        } ?: return
+        val trackDetailClazz = bridge.requireClass("$TRACK_DETAIL_PACKAGE.TrackDetailActivity")
 
-        simplifyField = hostField("TrackDetail#simplify", TRACK_DETAIL_PACKAGE) {
-            declaredClass(trackDetailClazz)
-        }
-        motionPathField = hostField("TrackDetail#motionPath", TRACK_DETAIL_PACKAGE) {
-            declaredClass(trackDetailClazz)
-        }
+        members = Members(
+            simplify = bridge.requireField("TrackDetail#simplify", TRACK_DETAIL_PACKAGE) {
+                declaredClass(trackDetailClazz)
+            },
+            motionPath = bridge.requireField("TrackDetail#motionPath", TRACK_DETAIL_PACKAGE) {
+                declaredClass(trackDetailClazz)
+            },
+        )
 
-        trackDetailClazz.firstMethodOrNullLogged {
+        trackDetailClazz.requireMethod {
             name = "onCreate"
             parameters(classOf<Bundle>())
-        }?.safeHook {
+        }.safeHook {
             after {
                 val activity = instanceOrNull as? Activity ?: return@after
                 addExportButton(activity)
@@ -64,8 +70,10 @@ object SportDataExportHooker : DexKitBaseHooker() {
     }
 
     private fun exportCurrentRecord(activity: Activity, dir: File): SportRecordExportOutcome {
-        val simplify = checkNotNull(simplifyField?.on(activity)) { "MotionPathSimplify unreadable" }
-        val motionPath = checkNotNull(motionPathField?.on(activity)) { "MotionPath unreadable" }
+        val simplify =
+            checkNotNull(members.simplify.getOrNull(activity)) { "MotionPathSimplify unreadable" }
+        val motionPath =
+            checkNotNull(members.motionPath.getOrNull(activity)) { "MotionPath unreadable" }
         return RecordExporter.export(SportRecordParser.parse(simplify, motionPath), dir)
     }
 

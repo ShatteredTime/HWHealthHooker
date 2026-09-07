@@ -10,7 +10,7 @@ import moe.evil.hwhh.shared.PREFS_NAME
 import moe.evil.hwhh.shared.log.HLog
 
 @PublishedApi
-internal val log = HLog("HookWrapper")
+internal val log = HLog("Prefs")
 
 inline fun YukiBaseHooker.ifDebugPref(toggle: DebugToggle, block: () -> Unit) {
     val enabled = runCatching {

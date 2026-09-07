@@ -4,13 +4,13 @@ import com.highcapable.yukihookapi.annotation.xposed.InjectYukiHookWithXposed
 import com.highcapable.yukihookapi.hook.factory.configs
 import com.highcapable.yukihookapi.hook.factory.encase
 import com.highcapable.yukihookapi.hook.xposed.proxy.IYukiHookXposedInit
-import moe.evil.hwhh.kdxref.describe
 import moe.evil.hwhh.shared.DebugPrefs
 import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.PREFS_NAME
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.log.LOG_TAG
 import moe.evil.hwhh.shared.log.LogLevel
+import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.sportdata.exporter.RecordExporter
 import moe.evil.hwhh.xposed.utils.DexKitWrapper
 import moe.evil.hwhh.xposed.utils.HostClassLoaderBridge

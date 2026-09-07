@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtLambdaArgument
 import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
+import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtObjectDeclaration
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiFactory
@@ -76,11 +77,8 @@ private const val HOOK_ROOT_ANNOTATION = "HookRoot"
 private val CAMEL_HUMP = Regex("([a-z0-9])([A-Z])")
 private val SEED_BASES = setOf(HookNames.SEED_HOOKER, ROOT_SUPER_TYPE)
 private val GUARDED_IMPORT_PREFIXES = listOf("com.highcapable.kavaref.", "org.luckypray.dexkit.")
-
-private val ALLOWED_LIBRARY_IMPORTS = setOf(
-    "com.highcapable.kavaref.extension.classOf",
-    "com.highcapable.kavaref.condition.type.Modifiers",
-)
+private val WRAPPER_DIR = "/" + HookNames.WRAPPER_PACKAGE.replace('.', '/')
+private val RESOLUTION_POLICY_CALLS = setOf("orFail", "optionally")
 
 internal class HookGraphScanner(
     private val hookerSources: List<File>,
@@ -110,7 +108,7 @@ internal class HookGraphScanner(
 
     fun scan() = withKtFiles { parse ->
         val hookerFiles = hookerSources.map(parse)
-        rejectRawLibraryImports(hookerFiles)
+        enforceWrapperBoundary(hookerSources.zip(hookerFiles))
         val bases = resolveBases(hookerFiles)
         val nodes = hookerFiles.flatMap { file -> parseHookers(file, bases) }
             .associateBy(HookerNode::name)
@@ -129,21 +127,40 @@ internal class HookGraphScanner(
         )
     }
 
-    private fun rejectRawLibraryImports(files: List<KtFile>) {
-        val banned = files.flatMap { file ->
-            file.importDirectives.mapNotNull { directive ->
-                val imported = directive.importedFqName?.asString() ?: return@mapNotNull null
-                if (GUARDED_IMPORT_PREFIXES.none(imported::startsWith)) return@mapNotNull null
-                if (imported in ALLOWED_LIBRARY_IMPORTS) return@mapNotNull null
-                val line = file.text.take(directive.textOffset).count { it == '\n' } + 1
-                "${file.name}:$line: $imported"
+    private fun enforceWrapperBoundary(files: List<Pair<File, KtFile>>) {
+        val violations = files.flatMap { (source, file) ->
+            val inWrapperDir = source.parentFile.invariantSeparatorsPath.endsWith(WRAPPER_DIR)
+            val inWrapperPackage = file.packageFqName.asString() == HookNames.WRAPPER_PACKAGE
+            if (inWrapperDir && inWrapperPackage) return@flatMap emptyList()
+            if (inWrapperDir || inWrapperPackage) return@flatMap listOf(
+                "${file.name}: package ${file.packageFqName} and directory disagree about " +
+                        "being the wrapper"
+            )
+            val imports = file.importDirectives.filter { directive ->
+                directive.importedFqName?.asString()
+                    ?.let { fq -> GUARDED_IMPORT_PREFIXES.any(fq::startsWith) } == true
+            }
+            val optIns = file.collectDescendantsOfType<KtNameReferenceExpression> {
+                it.getReferencedName() == HookNames.HOST_INTERNAL_API
+            }
+            val strayPolicy = file.collectDescendantsOfType<KtCallExpression> { call ->
+                call.calleeExpression?.text in RESOLUTION_POLICY_CALLS &&
+                        generateSequence(call.parent) { it.parent }.none {
+                            it is KtNamedFunction && it.name == HookNames.ON_HOOK_WITH_DEXKIT
+                        }
+            }
+            (imports + optIns + strayPolicy).map {
+                val line = file.text.take(it.textOffset).count { ch -> ch == '\n' } + 1
+                "${file.name}:$line: ${it.text.lineSequence().first()}"
             }
         }
-        check(banned.isEmpty()) {
-            banned.joinToString(
+        check(violations.isEmpty()) {
+            violations.joinToString(
                 separator = "\n",
-                prefix = "Hooker sources must reach KavaRef/DexKit through " +
-                        "${HookNames.KDXREF_PACKAGE}, add a wrapper there instead of importing:\n",
+                prefix = "Hooker sources must go through ${HookNames.WRAPPER_PACKAGE}: no raw " +
+                        "KavaRef/DexKit import, no ${HookNames.HOST_INTERNAL_API} opt-in, and " +
+                        "${RESOLUTION_POLICY_CALLS.joinToString("/")} only inside " +
+                        "${HookNames.ON_HOOK_WITH_DEXKIT}:\n",
             ) { "  - $it" }
         }
     }
