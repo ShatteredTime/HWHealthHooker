@@ -16,6 +16,9 @@
     <string name="hwhh_select_all">Select all / none</string>
     <string name="hwhh_no_type_selected">No type selected, export cancelled</string>
     <string name="hwhh_exporting">Exporting…</string>
+    <string name="hwhh_export_progress">%1$d / %2$d slices · %3$d rows</string>
+    <string name="hwhh_export_cancelled">Export canceled, partial file kept: %1$s</string>
+    <string name="hwhh_export_partial">%1$d slice(s) failed, %2$d rows exported</string>
     <string name="hwhh_export_failed">Export failed: %1$s</string>
     <string name="hwhh_export_failed_title">Export failed</string>
     <!-- Single activity FIT export -->

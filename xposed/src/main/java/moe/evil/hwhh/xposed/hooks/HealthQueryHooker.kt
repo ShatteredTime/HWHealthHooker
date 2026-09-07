@@ -13,14 +13,11 @@ import com.huawei.hihealth.HiDataReadOption
 import com.huawei.hihealth.HiHealthData
 import com.huawei.hihealth.api.HiHealthNativeApi
 import com.huawei.hihealth.data.listener.HiDataReadResultListener
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToStream
 import moe.evil.hwhh.shared.DebugToggle
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.model.HealthQueryRequest
-import moe.evil.hwhh.xposed.model.HealthQueryResponse
+import moe.evil.hwhh.xposed.model.HealthQuerySlice
 import moe.evil.hwhh.xposed.model.HealthSample
 import moe.evil.hwhh.xposed.sportdata.exporter.ensureExportDir
 import moe.evil.hwhh.xposed.utils.DexKitHooker
@@ -32,6 +29,7 @@ import moe.evil.hwhh.xposed.utils.wrapper.classOf
 import moe.evil.hwhh.xposed.utils.wrapper.invoke
 import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
 import moe.evil.hwhh.xposed.utils.wrapper.safeHook
+import moe.evil.hwhh.xposed.utils.writeNdjson
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -39,59 +37,78 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 internal interface HealthQueryApi : HookApi {
-    fun queryData(ctx: Context, request: HealthQueryRequest): Result<HealthQueryResponse>
+    fun querySlices(ctx: Context, request: HealthQueryRequest): Sequence<HealthQuerySlice>
 }
 
-@OptIn(ExperimentalSerializationApi::class)
 internal object HealthQueryHooker : DexKitHooker<HealthQueryApi>() {
     private const val ACTION_QUERY = "moe.evil.hwhh.action.QUERY_HEALTH"
     private const val RESULT_ACCEPTED = -1
     private const val RESULT_REJECTED = 1
     private val log = HLog.of<HealthQueryHooker>()
     private val receiverRegistered = AtomicBoolean(false)
-    private val json = Json
     private var apiFactory: HostMethod<HiHealthNativeApi>? = null
     private val metadata by require { HealthMetadataHooker }
 
     override val providedApi = object : HealthQueryApi {
-        override fun queryData(ctx: Context, request: HealthQueryRequest) = runCatching {
+        override fun querySlices(
+            ctx: Context,
+            request: HealthQueryRequest,
+        ): Sequence<HealthQuerySlice> {
             check(Looper.myLooper() != Looper.getMainLooper()) {
-                "Health query blocks for up to ${request.timeoutSec}s, refusing the main thread"
+                "Health query blocks for up to ${request.timeoutSec}s per slice, " +
+                        "refusing the main thread"
             }
             val api = checkNotNull(apiFactory?.invoke(null, ctx.applicationContext)) {
                 "HiHealthNativeApi unavailable"
             }
-            val option = HiDataReadOption().apply {
-                setType(request.types.toIntArray())
-                setTimeInterval(request.startTimeMs, request.endTimeMs)
-                if (request.count > 0) setCount(request.count)
-                setSortOrder(0)
-            }
-            var payload: Any? = null
-            var err = 0
-            val latch = CountDownLatch(1)
-            api.readHiHealthData(option, object : HiDataReadResultListener {
-                override fun onResult(data: Any?, errCode: Int, index: Int) {
-                    payload = data; err = errCode; latch.countDown()
+            val types = request.types.toIntArray()
+            return request.slices().mapIndexed { index, range ->
+                runCatching { api.readSlice(request, types, index, range) }.getOrElse { cause ->
+                    log.warn { "Slice $index [${range.first}, ${range.last}] failed: $cause" }
+                    HealthQuerySlice.Failed(index, range.first, range.last, cause)
                 }
-
-                override fun onResultIntent(readIntent: Int, data: Any?, errCode: Int, index: Int) {
-                    payload = data; err = errCode; latch.countDown()
-                }
-            })
-            check(latch.await(request.timeoutSec, TimeUnit.SECONDS)) {
-                "HiHealth read timed out after ${request.timeoutSec}s"
             }
-            check(err == 0) { "HiHealth read failed: err=$err" }
-            val rows = mutableListOf<HiHealthData>()
-            val types = HashSet(request.types)
-            collectRows(payload, rows, types)
-            HealthQueryResponse.read(
-                request,
-                rows.mapNotNull { it.toSample() },
-                metadata.resolveAll(types),
-            )
         }
+    }
+
+    private fun HiHealthNativeApi.readSlice(
+        request: HealthQueryRequest,
+        types: IntArray,
+        sliceIndex: Int,
+        range: LongRange,
+    ): HealthQuerySlice.Loaded {
+        val option = HiDataReadOption().apply {
+            setType(types)
+            setTimeInterval(range.first, range.last)
+            if (request.count > 0) setCount(request.count)
+            setSortOrder(0)
+        }
+        var payload: Any? = null
+        var err = 0
+        val latch = CountDownLatch(1)
+        readHiHealthData(option, object : HiDataReadResultListener {
+            override fun onResult(data: Any?, errCode: Int, index: Int) {
+                payload = data; err = errCode; latch.countDown()
+            }
+
+            override fun onResultIntent(readIntent: Int, data: Any?, errCode: Int, index: Int) {
+                payload = data; err = errCode; latch.countDown()
+            }
+        })
+        check(latch.await(request.timeoutSec, TimeUnit.SECONDS)) {
+            "HiHealth read timed out after ${request.timeoutSec}s"
+        }
+        check(err == 0) { "HiHealth read failed: err=$err" }
+        val rows = mutableListOf<HiHealthData>()
+        val seen = HashSet<Int>()
+        collectRows(payload, rows, seen)
+        return HealthQuerySlice.Loaded(
+            index = sliceIndex,
+            startTimeMs = range.first,
+            endTimeMs = range.last,
+            types = seen,
+            samples = rows.mapNotNull { it.toSample() },
+        )
     }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
@@ -140,19 +157,25 @@ internal object HealthQueryHooker : DexKitHooker<HealthQueryApi>() {
                                         val dir = checkNotNull(ctx.ensureExportDir()) {
                                             "Export dir unavailable"
                                         }
-                                        val response =
-                                            providedApi.queryData(ctx, query).getOrThrow()
                                         val out = File(
                                             dir,
                                             "health_query_${query.types.first()}_" +
-                                                    "${System.currentTimeMillis()}.json",
+                                                    "${System.currentTimeMillis()}.ndjson",
                                         )
-                                        out.outputStream().buffered().use { stream ->
-                                            json.encodeToStream(response, stream)
-                                        }
+                                        val summary = providedApi.querySlices(ctx, query)
+                                            .writeNdjson(
+                                                out = out,
+                                                request = query,
+                                                metadata = metadata.resolveAll(query.types)
+                                                    .getOrDefault(emptyMap()),
+                                            )
                                         log.debug {
                                             "Query types=${query.types} " +
-                                                    "count=${response.count} -> ${out.name}"
+                                                    "count=${summary.count} -> ${out.name}"
+                                        }
+                                        check(summary.failedSlices.isEmpty()) {
+                                            "${summary.failedSlices.size} slice(s) failed, " +
+                                                    "first: ${summary.failedSlices.first().error}"
                                         }
                                     }.fold(
                                         onSuccess = {

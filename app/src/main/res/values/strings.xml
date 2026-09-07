@@ -63,7 +63,7 @@
     <string name="analysis_clear_done">Cached analysis result cleared</string>
     <string name="setting_apply_failed">Could not apply this setting</string>
     <string name="about_version" translatable="false">%1$s (%2$s)</string>
-    <string name="about_source_url" translatable="false">https://github.com/SingerBallad/HWHealthHooker</string>
+    <string name="about_source_url" translatable="false">https://github.com/ShatteredTime/HWHealthHooker</string>
     <string name="about_source_label" translatable="false">GitHub</string>
     <string name="about_view_source">View source code at %1$s</string>
     <string name="easter_hint" translatable="false">Take it back...</string>

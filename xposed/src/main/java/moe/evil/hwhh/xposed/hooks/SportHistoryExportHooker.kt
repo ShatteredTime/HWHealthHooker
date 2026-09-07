@@ -11,10 +11,12 @@ import moe.evil.hwhh.shared.log.describe
 import moe.evil.hwhh.xposed.R
 import moe.evil.hwhh.xposed.sportdata.exporter.SportHistoryExporter
 import moe.evil.hwhh.xposed.sportdata.exporter.ensureExportDir
+import moe.evil.hwhh.xposed.utils.DateRangeRow
 import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import moe.evil.hwhh.xposed.utils.ShareExporter
 import moe.evil.hwhh.xposed.utils.ShareOutcome
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
+import moe.evil.hwhh.xposed.utils.dialogContent
 import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
@@ -23,14 +25,13 @@ import moe.evil.hwhh.xposed.utils.wrapper.requireClass
 import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
 import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.io.File
+import java.util.Calendar
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 @HookRoot(order = 4)
 object SportHistoryExportHooker : DexKitBaseHooker() {
     private const val TITLE_BAR_ID = "sport_history_titlebar"
-    private const val YEARS_BACK = 20L
-    private const val MS_PER_YEAR = 365L * 24 * 3600 * 1000
     private val log = HLog.of<SportHistoryExportHooker>()
     private val commonUi by require { CommonUIHooker }
     private val history by require { SportHistoryHooker }
@@ -68,6 +69,21 @@ object SportHistoryExportHooker : DexKitBaseHooker() {
     }
 
     private fun onExportClicked(activity: Activity) {
+        val timeRange = DateRangeRow(activity, activity.moduleString(R.string.hwhh_row_time)) {
+            add(Calendar.YEAR, -6)
+        }
+        commonUi.createCustomViewDialog(
+            activity = activity,
+            title = activity.moduleString(R.string.hwhh_batch_export),
+            contentView = activity.dialogContent(timeRange.view),
+            positive = DialogButton(activity.moduleString(R.string.hwhh_export)) {
+                startExport(activity, timeRange.range)
+            },
+            negative = DialogButton(activity.moduleString(R.string.hwhh_cancel)),
+        ).gracefulShow()
+    }
+
+    private fun startExport(activity: Activity, range: LongRange) {
         val cancelled = AtomicBoolean(false)
         val progress = commonUi.createProgressDialog(
             activity,
@@ -86,15 +102,13 @@ object SportHistoryExportHooker : DexKitBaseHooker() {
                     return@runCatching
                 }
                 val runDir = File(dir, "batch_${System.currentTimeMillis()}").apply { mkdirs() }
-                val now = System.currentTimeMillis()
-                val start = now - YEARS_BACK * MS_PER_YEAR
-                log.debug { "Querying range start=$start end=$now" }
+                log.debug { "Querying range start=${range.first} end=${range.last}" }
                 val result = SportHistoryExporter.exportSupported(
                     history,
                     activity.applicationContext,
                     runDir,
-                    start,
-                    now,
+                    range.first,
+                    range.last,
                     isCancelled = cancelled::get,
                 ) { done, total ->
                     progress.setProgress(done * 100 / total)
@@ -108,7 +122,7 @@ object SportHistoryExportHooker : DexKitBaseHooker() {
                     result.candidates,
                     runDir.absolutePath,
                 )
-                val shareOutcome = if (cancelled.get() || result.exported == 0) null else {
+                val shareOutcome = if (cancelled.get()) null else {
                     cancelled.set(false)
                     progress.setMessage(activity.moduleString(R.string.hwhh_share_zipping))
                     ShareExporter.share(

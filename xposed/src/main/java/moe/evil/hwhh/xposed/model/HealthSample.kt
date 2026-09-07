@@ -1,6 +1,7 @@
 package moe.evil.hwhh.xposed.model
 
 import kotlinx.serialization.Serializable
+import java.util.concurrent.TimeUnit
 
 @Serializable
 data class HealthSample(
@@ -31,31 +32,38 @@ data class HealthQueryRequest(
     val endTimeMs: Long,
     val count: Int = 0,
     val timeoutSec: Long = 10L,
-)
-
-@Serializable
-data class HealthQueryResponse(
-    val requestedTypes: List<Int>,
-    val startTimeMs: Long,
-    val endTimeMs: Long,
-    val count: Int,
-    val metadata: Map<Int, HealthMetadata> = emptyMap(),
-    val metadataError: String? = null,
-    val samples: List<HealthSample> = emptyList(),
+    val sliceDays: Long = 1L,
 ) {
-    companion object {
-        fun read(
-            request: HealthQueryRequest,
-            samples: List<HealthSample>,
-            metadata: Result<Map<Int, HealthMetadata>> = Result.success(emptyMap()),
-        ) = HealthQueryResponse(
-            requestedTypes = request.types,
-            startTimeMs = request.startTimeMs,
-            endTimeMs = request.endTimeMs,
-            count = samples.size,
-            metadata = metadata.getOrDefault(emptyMap()),
-            metadataError = metadata.exceptionOrNull()?.toString(),
-            samples = samples,
-        )
+    private val sliceMs get() = TimeUnit.DAYS.toMillis(sliceDays)
+
+    val sliceCount get() = slices().count()
+
+    fun slices(): Sequence<LongRange> = when {
+        endTimeMs < startTimeMs -> emptySequence()
+        count > 0 -> sequenceOf(startTimeMs..endTimeMs)
+        else -> generateSequence(startTimeMs) { it + sliceMs }
+            .takeWhile { it <= endTimeMs }
+            .map { it..minOf(it + sliceMs - 1, endTimeMs) }
     }
+}
+
+sealed interface HealthQuerySlice {
+    val index: Int
+    val startTimeMs: Long
+    val endTimeMs: Long
+
+    data class Loaded(
+        override val index: Int,
+        override val startTimeMs: Long,
+        override val endTimeMs: Long,
+        val types: Set<Int>,
+        val samples: List<HealthSample>,
+    ) : HealthQuerySlice
+
+    data class Failed(
+        override val index: Int,
+        override val startTimeMs: Long,
+        override val endTimeMs: Long,
+        val cause: Throwable,
+    ) : HealthQuerySlice
 }

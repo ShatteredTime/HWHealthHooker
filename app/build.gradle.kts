@@ -9,7 +9,6 @@ val gitCommit = runCatching {
         workingDir = rootDir
         commandLine("git", *args)
     }.standardOutput.asText.get()
-
     val hash = git("rev-parse", "HEAD").trim().take(12)
     require(hash.length == 12)
     val dirty = git("--no-optional-locks", "status", "-uno", "--porcelain").isNotBlank()
@@ -23,8 +22,8 @@ android {
     defaultConfig {
         applicationId = "moe.evil.hwhh"
         minSdk = 36
-        versionCode = 7
-        versionName = "1.7.0"
+        versionCode = 8
+        versionName = "1.0.8"
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
         ndk {
             //noinspection ChromeOsAbiSupport

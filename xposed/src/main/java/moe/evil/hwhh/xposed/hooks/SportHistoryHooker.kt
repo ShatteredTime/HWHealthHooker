@@ -36,7 +36,7 @@ internal interface SportHistoryApi : HookApi {
 }
 
 internal object SportHistoryHooker : DexKitHooker<SportHistoryApi>() {
-    private const val QUERY_TIMEOUT_SEC = 5L
+    private const val QUERY_TIMEOUT_SEC = 10L
     private val log = HLog.of<SportHistoryHooker>()
 
     private class Members(

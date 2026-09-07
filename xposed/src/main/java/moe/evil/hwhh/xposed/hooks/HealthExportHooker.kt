@@ -2,28 +2,18 @@ package moe.evil.hwhh.xposed.hooks
 
 import android.app.Activity
 import android.content.Context
-import android.content.res.ColorStateList
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
-import android.util.TypedValue
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.TextView
 import com.huawei.ui.commonui.checkbox.HealthCheckBox
-import com.huawei.ui.commonui.datepicker.HealthDatePickerDialog
 import com.huawei.ui.commonui.popupview.PopViewList
 import com.huawei.ui.commonui.titlebar.CustomTitleBar
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToStream
-import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.log.describe
@@ -31,10 +21,17 @@ import moe.evil.hwhh.xposed.R
 import moe.evil.hwhh.xposed.model.HealthMetadata
 import moe.evil.hwhh.xposed.model.HealthQueryRequest
 import moe.evil.hwhh.xposed.sportdata.exporter.ensureExportDir
+import moe.evil.hwhh.xposed.utils.DateRangeRow
 import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import moe.evil.hwhh.xposed.utils.ShareExporter
 import moe.evil.hwhh.xposed.utils.ShareOutcome
+import moe.evil.hwhh.xposed.utils.dialogContent
+import moe.evil.hwhh.xposed.utils.dp
+import moe.evil.hwhh.xposed.utils.hostTextColor
+import moe.evil.hwhh.xposed.utils.matchWidth
 import moe.evil.hwhh.xposed.utils.moduleString
+import moe.evil.hwhh.xposed.utils.muted
+import moe.evil.hwhh.xposed.utils.summaryRow
 import moe.evil.hwhh.xposed.utils.toast
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 import moe.evil.hwhh.xposed.utils.wrapper.classOf
@@ -44,44 +41,26 @@ import moe.evil.hwhh.xposed.utils.wrapper.requireConstructor
 import moe.evil.hwhh.xposed.utils.wrapper.requireField
 import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
 import moe.evil.hwhh.xposed.utils.wrapper.safeHook
+import moe.evil.hwhh.xposed.utils.writeNdjson
 import java.io.File
 import java.lang.ref.WeakReference
 import java.util.Calendar
-import java.util.GregorianCalendar
 import java.util.WeakHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 @HookRoot(order = 5)
-@OptIn(ExperimentalSerializationApi::class)
 object HealthExportHooker : DexKitBaseHooker() {
     private const val HOME_FRAGMENT_CLASS = "com.huawei.ui.homehealth.HomeFragment"
-    private const val ROW_ARROW_DRAWABLE = "ic_health_list_arrow_gray"
+    private const val DEFAULT_DAYS_BACK = 7
+    private const val SLICE_TIMEOUT_SEC = 30L
     private val log = HLog.of<HealthExportHooker>()
-    private val json = Json
     private val commonUi by require { CommonUIHooker }
     private val query by require { HealthQueryHooker }
     private val metadata by require { HealthMetadataHooker }
     private val db by require { HiHealthDbHooker }
     private var currentTitleBar: WeakReference<CustomTitleBar>? = null
     private val exportPopupItems = WeakHashMap<PopViewList, ArrayList<String>>()
-
-    private fun Activity.dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-
-    // Host stub interfaces must be implemented by a named class under the kept
-    // moe.evil.hwhh.xposed package: a SAM lambda becomes an R8 synthetic that keep
-    // rules cannot reach, and since the interface is compileOnly R8 renames the
-    // override, so the host's call lands on AbstractMethodError in release builds.
-    @Suppress("ObjectLiteralToLambda")
-    private fun dateSelected(onSelected: (Int, Int, Int) -> Unit) =
-        object : HealthDatePickerDialog.DateSelectedListener {
-            override fun onDateSelected(year: Int, month: Int, dayOfMonth: Int) =
-                onSelected(year, month, dayOfMonth)
-        }
-
-    private fun matchWidth() = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT,
-    )
 
     // HealthCheckBox's button asset is a full 48dp touch target with the ~24dp visible
     // square centred in it, so ~12dp of transparent margin is baked into the drawable and
@@ -226,51 +205,18 @@ object HealthExportHooker : DexKitBaseHooker() {
         types: List<Int>,
         names: Map<Int, HealthMetadata>,
     ) {
-        val startCal = GregorianCalendar().apply { add(Calendar.DAY_OF_MONTH, -7) }
-        val endCal = GregorianCalendar()
         val selected = LinkedHashSet<Int>()
-        val textColor = HealthCheckBox(activity).currentTextColor
-        val mutedColor = (textColor and 0x00FFFFFF) or (0x99 shl 24)
+        val textColor = activity.hostTextColor()
+        val mutedColor = textColor.muted()
 
-        fun rangeLabel(): String {
-            fun d(c: GregorianCalendar) = "%04d-%02d-%02d".format(
-                c.get(Calendar.YEAR),
-                c.get(Calendar.MONTH) + 1,
-                c.get(Calendar.DAY_OF_MONTH),
-            )
-            return "${d(startCal)} ~ ${d(endCal)}"
+        val timeRange = DateRangeRow(activity, activity.moduleString(R.string.hwhh_row_time)) {
+            add(Calendar.DAY_OF_MONTH, -DEFAULT_DAYS_BACK)
         }
 
-        val (timeRow, timeValue) = summaryRow(
-            activity,
-            textColor,
-            mutedColor,
-            activity.moduleString(R.string.hwhh_row_time),
-        )
-        timeValue.text = rangeLabel()
-        timeRow.setOnClickListener {
-            HealthDatePickerDialog(
-                activity,
-                dateSelected { y, m, day ->
-                    startCal.set(y, m, day)
-                    HealthDatePickerDialog(
-                        activity,
-                        dateSelected { y2, m2, day2 ->
-                            endCal.set(y2, m2, day2)
-                            timeValue.text = rangeLabel()
-                        },
-                        endCal,
-                    ).show()
-                },
-                startCal,
-            ).show()
-        }
-
-        val (idRow, idValue) = summaryRow(
-            activity,
-            textColor,
-            mutedColor,
+        val (idRow, idValue) = activity.summaryRow(
             activity.moduleString(R.string.hwhh_row_id),
+            textColor,
+            mutedColor,
         )
 
         fun idSummary() =
@@ -343,22 +289,10 @@ object HealthExportHooker : DexKitBaseHooker() {
             ).gracefulShow()
         }
 
-        val content = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            )
-            val hPad = activity.dp(8)
-            setPadding(hPad, 0, hPad, 0)
-            addView(timeRow)
-            addView(idRow)
-        }
-
         commonUi.createCustomViewDialog(
             activity = activity,
             title = activity.moduleString(R.string.hwhh_export_title),
-            contentView = content,
+            contentView = activity.dialogContent(timeRange.view, idRow),
             positive = DialogButton(activity.moduleString(R.string.hwhh_export)) {
                 if (selected.isEmpty()) {
                     commonUi.createNoTitleCustomAlertDialog(
@@ -369,24 +303,16 @@ object HealthExportHooker : DexKitBaseHooker() {
                         toast(moduleString(R.string.hwhh_no_type_selected))
                     }
                 } else {
-                    startCal.set(Calendar.HOUR_OF_DAY, 0)
-                    startCal.set(Calendar.MINUTE, 0)
-                    startCal.set(Calendar.SECOND, 0)
-                    startCal.set(Calendar.MILLISECOND, 0)
-                    endCal.set(Calendar.HOUR_OF_DAY, 23)
-                    endCal.set(Calendar.MINUTE, 59)
-                    endCal.set(Calendar.SECOND, 59)
-                    endCal.set(Calendar.MILLISECOND, 999)
-
+                    val cancelled = AtomicBoolean(false)
                     val progress = commonUi.createProgressDialog(
                         activity,
                         activity.moduleString(R.string.hwhh_exporting),
-                    ).gracefulShow()
+                    ) { cancelled.set(true) }.gracefulShow()
                     val exportTypes = selected.toList()
+                    val exportNames = names.filterKeys(selected::contains)
                     thread {
                         runCatching {
-                            val dir = activity.applicationContext.ensureExportDir()
-                            if (dir == null) {
+                            val dir = activity.applicationContext.ensureExportDir() ?: run {
                                 commonUi.createNoTitleCustomAlertDialog(
                                     activity = activity,
                                     message = activity.moduleString(R.string.hwhh_export_dir_failed),
@@ -394,42 +320,72 @@ object HealthExportHooker : DexKitBaseHooker() {
                                 ).gracefulShow {
                                     toast(moduleString(R.string.hwhh_export_dir_failed))
                                 }
-                            } else {
-                                val request = HealthQueryRequest(
-                                    types = exportTypes,
-                                    startTimeMs = startCal.timeInMillis,
-                                    endTimeMs = endCal.timeInMillis,
-                                    timeoutSec = 60L,
+                                return@runCatching
+                            }
+                            val request = HealthQueryRequest(
+                                types = exportTypes,
+                                startTimeMs = timeRange.range.first,
+                                endTimeMs = timeRange.range.last,
+                                timeoutSec = SLICE_TIMEOUT_SEC,
+                            )
+                            val out = File(
+                                dir,
+                                "health_export_${System.currentTimeMillis()}.ndjson",
+                            )
+                            val summary = query.querySlices(activity, request).writeNdjson(
+                                out = out,
+                                request = request,
+                                metadata = exportNames,
+                                isCancelled = cancelled::get,
+                            ) { done, total, rows ->
+                                progress.setProgress(done * 100 / total)
+                                progress.setMessage(
+                                    activity.moduleString(
+                                        R.string.hwhh_export_progress,
+                                        done,
+                                        total,
+                                        rows,
+                                    )
                                 )
-                                val response = query.queryData(activity, request).getOrThrow()
-                                val out = File(
-                                    dir,
-                                    "health_export_${System.currentTimeMillis()}.json",
+                            }
+                            log.debug {
+                                "Exported ${summary.count} rows over ${request.sliceCount} " +
+                                        "slices, failed=${summary.failedSlices.size}, " +
+                                        "cancelled=${summary.cancelled}"
+                            }
+                            if (summary.failedSlices.isNotEmpty()) {
+                                activity.toast(
+                                    activity.moduleString(
+                                        R.string.hwhh_export_partial,
+                                        summary.failedSlices.size,
+                                        summary.count,
+                                    )
                                 )
-                                out.outputStream().use { json.encodeToStream(response, it) }
-                                val shareOutcome = ShareExporter.share(
+                            }
+                            if (summary.cancelled) {
+                                activity.toast(
+                                    activity.moduleString(R.string.hwhh_export_cancelled, out.name)
+                                )
+                                return@runCatching
+                            }
+                            val shareOutcome = ShareExporter.share(
+                                activity = activity,
+                                target = out,
+                                chooserTitle = activity.moduleString(R.string.hwhh_share_title),
+                                mimeType = "application/json",
+                            )
+                            if (shareOutcome is ShareOutcome.Failed) {
+                                val cause = shareOutcome.error.describe()
+                                commonUi.createCustomTextAlertDialog(
                                     activity = activity,
-                                    target = out,
-                                    chooserTitle = activity.moduleString(
-                                        R.string.hwhh_share_title,
+                                    title = activity.moduleString(R.string.hwhh_share_failed_title),
+                                    message = activity.moduleString(
+                                        R.string.hwhh_error_detail,
+                                        cause,
                                     ),
-                                    mimeType = "application/json",
-                                )
-                                if (shareOutcome is ShareOutcome.Failed) {
-                                    val cause = shareOutcome.error.describe()
-                                    commonUi.createCustomTextAlertDialog(
-                                        activity = activity,
-                                        title = activity.moduleString(
-                                            R.string.hwhh_share_failed_title,
-                                        ),
-                                        message = activity.moduleString(
-                                            R.string.hwhh_error_detail,
-                                            cause,
-                                        ),
-                                        positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
-                                    ).gracefulShow {
-                                        toast(moduleString(R.string.hwhh_share_failed, cause))
-                                    }
+                                    positive = DialogButton(activity.moduleString(R.string.hwhh_ok)),
+                                ).gracefulShow {
+                                    toast(moduleString(R.string.hwhh_share_failed, cause))
                                 }
                             }
                         }.onFailure { e ->
@@ -452,56 +408,5 @@ object HealthExportHooker : DexKitBaseHooker() {
             },
             negative = DialogButton(activity.moduleString(R.string.hwhh_cancel)),
         ).gracefulShow()
-    }
-
-    private fun summaryRow(
-        activity: Activity,
-        textColor: Int,
-        mutedColor: Int,
-        title: String,
-    ): Pair<LinearLayout, TextView> {
-        val value = TextView(activity).apply {
-            setTextColor(mutedColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-        }
-        val ripple = TypedValue().also {
-            activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
-        }
-        val row = LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            isClickable = true
-            setBackgroundResource(ripple.resourceId)
-            layoutParams = matchWidth()
-            val vPad = activity.dp(16)
-            setPadding(0, vPad, 0, vPad)
-            addView(
-                TextView(activity).apply {
-                    text = title
-                    setTextColor(textColor)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                    layoutParams =
-                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                },
-            )
-            addView(value)
-            val arrowRes = activity.resources
-                .getIdentifier(ROW_ARROW_DRAWABLE, "drawable", HOOK_TARGET_PACKAGE)
-            if (arrowRes == 0) {
-                log.debug { "Summary row drawable not found: $ROW_ARROW_DRAWABLE" }
-            } else {
-                addView(
-                    ImageView(activity).apply {
-                        setImageResource(arrowRes)
-                        imageTintList = ColorStateList.valueOf(mutedColor)
-                        val size = activity.dp(16)
-                        layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                            marginStart = activity.dp(6)
-                        }
-                    },
-                )
-            }
-        }
-        return row to value
     }
 }
