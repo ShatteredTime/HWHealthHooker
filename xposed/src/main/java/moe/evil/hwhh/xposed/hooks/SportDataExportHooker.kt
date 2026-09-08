@@ -6,7 +6,6 @@ import android.view.View
 import com.huawei.hwfoundationmodel.trackmodel.MotionPath
 import com.huawei.hwfoundationmodel.trackmodel.MotionPathSimplify
 import com.huawei.ui.commonui.titlebar.CustomTitleBar
-import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.log.describe
@@ -19,6 +18,8 @@ import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import moe.evil.hwhh.xposed.utils.ShareExporter
 import moe.evil.hwhh.xposed.utils.ShareOutcome
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
+import moe.evil.hwhh.xposed.utils.hostDrawableId
+import moe.evil.hwhh.xposed.utils.hostViewId
 import moe.evil.hwhh.xposed.utils.moduleString
 import moe.evil.hwhh.xposed.utils.toast
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
@@ -34,6 +35,7 @@ import kotlin.concurrent.thread
 
 @HookRoot(order = 3)
 object SportDataExportHooker : DexKitBaseHooker() {
+    private const val EXPORT_ICON = "ic_public_export"
     private const val TITLE_BAR_ID = "track_detail_title_bar"
     private const val TRACK_DETAIL_PACKAGE = "com.huawei.healthcloud.plugintrack.ui.activity"
     private val log = HLog.of<SportDataExportHooker>()
@@ -78,8 +80,7 @@ object SportDataExportHooker : DexKitBaseHooker() {
     }
 
     private fun addExportButton(activity: Activity) {
-        val titleBarId = activity.resources.getIdentifier(TITLE_BAR_ID, "id", HOOK_TARGET_PACKAGE)
-            .asResIdOrNull() ?: run {
+        val titleBarId = activity.resources.hostViewId(TITLE_BAR_ID).asResIdOrNull() ?: run {
             log.warn { "Resource '$TITLE_BAR_ID' not found in ${activity.javaClass.simpleName}" }
             return
         }
@@ -88,7 +89,7 @@ object SportDataExportHooker : DexKitBaseHooker() {
             return
         }
         val icon = runCatching {
-            activity.resources.getIdentifier("ic_public_export", "drawable", HOOK_TARGET_PACKAGE)
+            activity.resources.hostDrawableId(EXPORT_ICON)
                 .asResIdOrNull()?.let { activity.getDrawable(it) }
         }.getOrNull() ?: runCatching {
             activity.getDrawable(android.R.drawable.stat_sys_upload_done)

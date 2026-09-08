@@ -17,6 +17,8 @@
     <string name="hook_sport_history_export_subtitle">Batch export Activity Log</string>
     <string name="hook_health_export_title">Health Data Export</string>
     <string name="hook_health_export_subtitle">Export raw health metrics as JSON (Long-press to clear ID resolution cache)</string>
+    <string name="hook_module_cache_title">Module Cache Cleanup</string>
+    <string name="hook_module_cache_subtitle">Add an HWHealthHooker entry under Settings &gt; Clear cache</string>
     <string name="debug_settings_title">Debug Settings</string>
     <string name="debug_build_badge" translatable="false">DEBUG</string>
     <string name="debug_red_dot_title">Profile Red Dot Debug</string>

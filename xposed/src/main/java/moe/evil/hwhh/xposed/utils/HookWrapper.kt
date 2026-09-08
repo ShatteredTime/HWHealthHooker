@@ -1,11 +1,13 @@
 package moe.evil.hwhh.xposed.utils
 
 import android.app.Activity
+import android.content.res.Resources
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import com.highcapable.yukihookapi.hook.entity.YukiBaseHooker
 import moe.evil.hwhh.shared.DebugToggle
+import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.PREFS_NAME
 import moe.evil.hwhh.shared.log.HLog
 
@@ -35,6 +37,10 @@ fun collapseView(view: View) {
 }
 
 fun Int.asResIdOrNull() = takeIf { it != 0 }
+
+fun Resources.hostViewId(name: String) = getIdentifier(name, "id", HOOK_TARGET_PACKAGE)
+
+fun Resources.hostDrawableId(name: String) = getIdentifier(name, "drawable", HOOK_TARGET_PACKAGE)
 
 fun Activity.toast(msg: String) {
     runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }

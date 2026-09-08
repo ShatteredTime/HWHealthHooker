@@ -10,6 +10,7 @@ import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
 import moe.evil.hwhh.xposed.utils.collapseView
+import moe.evil.hwhh.xposed.utils.hostViewId
 import moe.evil.hwhh.xposed.utils.ifDebugPref
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 import moe.evil.hwhh.xposed.utils.wrapper.HostField
@@ -229,7 +230,7 @@ object PersonalCenterHooker : DexKitBaseHooker() {
     private fun hideKakaPendingText(host: Any?) {
         val rootView = host as? View ?: return
         val pendingId = kakaPendingId ?: rootView.resources
-            .getIdentifier(KAKA_PENDING_ID, "id", HOOK_TARGET_PACKAGE)
+            .hostViewId(KAKA_PENDING_ID)
             .also { kakaPendingId = it }
         pendingId.asResIdOrNull()
             ?.let { rootView.findViewById<View>(it) }

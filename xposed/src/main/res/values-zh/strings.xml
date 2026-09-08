@@ -40,6 +40,11 @@
     <string name="hwhh_share_zipping">正在打包…</string>
     <string name="hwhh_share_failed_title">分享失败</string>
     <string name="hwhh_share_failed">分享失败：%1$s</string>
+    <!-- Module cache -->
+    <string name="hwhh_cache_clear_message">缓存中存储的是 HWHealthHooker 导出的文件，清理后不影响正常使用，确认清理吗？</string>
+    <string name="hwhh_cache_clear_confirm">清除</string>
+    <string name="hwhh_cache_cleared">缓存已清理</string>
+    <string name="hwhh_cache_partially_cleared">部分缓存文件未能删除</string>
     <!-- Shared actions -->
     <string name="hwhh_error_detail">出现错误：\n\n%1$s</string>
     <string name="hwhh_ok">确定</string>

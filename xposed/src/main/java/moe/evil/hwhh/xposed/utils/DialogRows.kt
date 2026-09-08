@@ -10,7 +10,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.huawei.ui.commonui.checkbox.HealthCheckBox
 import com.huawei.ui.commonui.datepicker.HealthDatePickerDialog
-import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.log.HLog
 import java.util.Calendar
 import java.util.GregorianCalendar
@@ -93,7 +92,7 @@ fun Activity.summaryRow(
             },
         )
         addView(value)
-        val arrowRes = resources.getIdentifier(ROW_ARROW_DRAWABLE, "drawable", HOOK_TARGET_PACKAGE)
+        val arrowRes = resources.hostDrawableId(ROW_ARROW_DRAWABLE)
         if (arrowRes == 0) {
             rowLog.debug { "Summary row drawable not found: $ROW_ARROW_DRAWABLE" }
         } else {

@@ -3,11 +3,11 @@ package moe.evil.hwhh.xposed.hooks
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import moe.evil.hwhh.shared.HOOK_TARGET_PACKAGE
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.xposed.utils.DexKitBaseHooker
 import moe.evil.hwhh.xposed.utils.asResIdOrNull
 import moe.evil.hwhh.xposed.utils.collapseView
+import moe.evil.hwhh.xposed.utils.hostViewId
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
 import moe.evil.hwhh.xposed.utils.wrapper.HostField
 import moe.evil.hwhh.xposed.utils.wrapper.classOf
@@ -124,7 +124,7 @@ object HomeHooker : DexKitBaseHooker() {
     private fun collapseDailyMomentCard(holder: Any?) {
         val itemView = extractItemView(holder)
         val cardId = dailyMomentCardId ?: itemView.resources
-            .getIdentifier(DAILY_MOMENT_CARD_ID, "id", HOOK_TARGET_PACKAGE)
+            .hostViewId(DAILY_MOMENT_CARD_ID)
             .also { dailyMomentCardId = it }
         cardId.asResIdOrNull()?.let { itemView.findViewById<View>(it) }?.let(::collapseView)
         collapseView(itemView)

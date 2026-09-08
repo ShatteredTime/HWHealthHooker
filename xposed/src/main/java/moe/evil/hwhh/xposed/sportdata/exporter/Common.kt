@@ -6,7 +6,9 @@ import java.io.File
 
 private val log = HLog("Export")
 
-fun Context.ensureExportDir() = File(getExternalFilesDir(null), "HWHealthExport").let { dir ->
+fun Context.exportDir() = File(getExternalFilesDir(null), "HWHealthExport")
+
+fun Context.ensureExportDir() = exportDir().let { dir ->
     dir.takeIf { it.exists() || it.mkdirs() }
         ?: null.also { log.warn { "Export dir not usable: ${dir.path}" } }
 }

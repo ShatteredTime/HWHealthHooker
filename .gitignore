@@ -11,6 +11,7 @@ local.properties
 /.claude
 app/release/
 /.export
+/.jadx
 /.kotlin/
 .*.json
 *.log

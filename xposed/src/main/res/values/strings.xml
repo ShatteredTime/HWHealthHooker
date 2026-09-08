@@ -40,6 +40,12 @@
     <string name="hwhh_share_zipping">Packing archive…</string>
     <string name="hwhh_share_failed_title">Share failed</string>
     <string name="hwhh_share_failed">Share failed: %1$s</string>
+    <!-- Module cache -->
+    <string name="hwhh_cache_entry" translatable="false">HWHealthHooker</string>
+    <string name="hwhh_cache_clear_message">The cache stores the files HWHealthHooker exported. Clearing it won\'t affect normal use. Clear anyway?</string>
+    <string name="hwhh_cache_clear_confirm">Clear</string>
+    <string name="hwhh_cache_cleared">Cache cleared.</string>
+    <string name="hwhh_cache_partially_cleared">Some cached files could not be deleted.</string>
     <!-- Shared actions -->
     <string name="hwhh_error_detail">An error occurred:\n\n%1$s</string>
     <string name="hwhh_ok">OK</string>

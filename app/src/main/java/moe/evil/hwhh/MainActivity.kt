@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Email
@@ -133,6 +134,12 @@ private fun HookFeature.presentation() = when (this) {
         Icons.Outlined.MonitorHeart,
         R.string.hook_health_export_title,
         R.string.hook_health_export_subtitle
+    )
+
+    HookFeature.MODULE_CACHE -> Triple(
+        Icons.Outlined.CleaningServices,
+        R.string.hook_module_cache_title,
+        R.string.hook_module_cache_subtitle
     )
 }
 
