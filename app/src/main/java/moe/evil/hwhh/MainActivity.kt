@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Terminal
@@ -134,6 +135,12 @@ private fun HookFeature.presentation() = when (this) {
         Icons.Outlined.MonitorHeart,
         R.string.hook_health_export_title,
         R.string.hook_health_export_subtitle
+    )
+
+    HookFeature.HEALTH_INSIGHTS -> Triple(
+        Icons.Outlined.Insights,
+        R.string.hook_health_insights_title,
+        R.string.hook_health_insights_subtitle
     )
 
     HookFeature.MODULE_CACHE -> Triple(

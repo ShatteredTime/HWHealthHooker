@@ -35,6 +35,15 @@
     <string name="hwhh_batch_done">成功 %1$d，无 GPS %2$d，失败 %3$d（共 %4$d）\n\n%5$s</string>
     <string name="hwhh_batch_failed_title">批量导出失败</string>
     <string name="hwhh_batch_failed">批量导出失败：%1$s</string>
+    <!-- Health insights export -->
+    <string name="hwhh_insights_title">健康洞察导出</string>
+    <string name="hwhh_insights_exporting">正在读取健康洞察…</string>
+    <string name="hwhh_insights_done_title">导出完成</string>
+    <string name="hwhh_insights_done_message">%1$s\n\n洞察：共 %2$d 张卡片，其中 %3$d 张有数据。\n趋势：共 %4$d 份报告、%5$d 个数据点。</string>
+    <string name="hwhh_insights_share">分享</string>
+    <string name="hwhh_insights_exported">洞察已导出：%1$s</string>
+    <string name="hwhh_insights_failed_title">洞察导出失败</string>
+    <string name="hwhh_insights_failed">洞察导出失败：%1$s</string>
     <!-- Sharing -->
     <string name="hwhh_share_title">分享导出结果</string>
     <string name="hwhh_share_zipping">正在打包…</string>

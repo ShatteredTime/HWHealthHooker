@@ -1,19 +1,14 @@
 package moe.evil.hwhh.xposed.hooks
 
 import android.app.Activity
-import android.content.Context
-import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
-import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import com.huawei.ui.commonui.checkbox.HealthCheckBox
-import com.huawei.ui.commonui.popupview.PopViewList
-import com.huawei.ui.commonui.titlebar.CustomTitleBar
 import moe.evil.hwhh.shared.HookRoot
 import moe.evil.hwhh.shared.log.HLog
 import moe.evil.hwhh.shared.log.describe
@@ -34,33 +29,22 @@ import moe.evil.hwhh.xposed.utils.muted
 import moe.evil.hwhh.xposed.utils.summaryRow
 import moe.evil.hwhh.xposed.utils.toast
 import moe.evil.hwhh.xposed.utils.wrapper.HostBridge
-import moe.evil.hwhh.xposed.utils.wrapper.classOf
-import moe.evil.hwhh.xposed.utils.wrapper.getOrNull
-import moe.evil.hwhh.xposed.utils.wrapper.requireClass
-import moe.evil.hwhh.xposed.utils.wrapper.requireConstructor
-import moe.evil.hwhh.xposed.utils.wrapper.requireField
-import moe.evil.hwhh.xposed.utils.wrapper.requireMethod
-import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import moe.evil.hwhh.xposed.utils.writeNdjson
 import java.io.File
-import java.lang.ref.WeakReference
 import java.util.Calendar
-import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 @HookRoot(order = 5)
 object HealthExportHooker : DexKitBaseHooker() {
-    private const val HOME_FRAGMENT_CLASS = "com.huawei.ui.homehealth.HomeFragment"
     private const val DEFAULT_DAYS_BACK = 7
     private const val SLICE_TIMEOUT_SEC = 30L
     private val log = HLog.of<HealthExportHooker>()
     private val commonUi by require { CommonUIHooker }
+    private val menu by require { HomeMenuHooker }
     private val query by require { HealthQueryHooker }
     private val metadata by require { HealthMetadataHooker }
     private val db by require { HiHealthDbHooker }
-    private var currentTitleBar: WeakReference<CustomTitleBar>? = null
-    private val exportPopupItems = WeakHashMap<PopViewList, ArrayList<String>>()
 
     // HealthCheckBox's button asset is a full 48dp touch target with the ~24dp visible
     // square centred in it, so ~12dp of transparent margin is baked into the drawable and
@@ -75,62 +59,10 @@ object HealthExportHooker : DexKitBaseHooker() {
     }
 
     override fun onHookWithDexKit(bridge: HostBridge) {
-        val homeFragmentClazz = bridge.requireClass(HOME_FRAGMENT_CLASS)
-
-        val titleBarField = bridge.requireField<CustomTitleBar>(
-            label = "HomeFragment#titleBar",
-            inPackage = HOME_FRAGMENT_CLASS.substringBeforeLast('.'),
-        ) {
-            declaredClass(homeFragmentClazz)
-        }
-
-        homeFragmentClazz.requireMethod {
-            name = "onActivityCreated"
-            parameters(classOf<Bundle>())
-        }.safeHook {
-            after {
-                currentTitleBar = titleBarField.getOrNull(instanceOrNull)?.let { WeakReference(it) }
-            }
-        }
-
-        val setClickListener = bridge.requireMethod<Unit>(
-            label = "PopViewList#setClickListener",
-            inPackage = "com.huawei.ui.commonui.popupview",
-        ) {
-            declaredClass(classOf<PopViewList>())
-            paramTypes(classOf<PopViewList.PopViewClickListener>())
-        }
-
-        classOf<PopViewList>().requireConstructor {
-            parameters(classOf<Context>(), classOf<View>(), classOf<ArrayList<String>>())
-        }.safeHook {
-            before {
-                val titleBar = currentTitleBar?.get() ?: return@before
-                if (args(1).cast<View?>() !== titleBar) return@before
-                val activity = titleBar.context as? Activity ?: return@before
-                val items = args(2).cast<ArrayList<String>?>() ?: return@before
-                items.add(activity.moduleString(R.string.hwhh_export_title))
-                exportPopupItems[instance<PopViewList>()] = items
-            }
-        }
-
-        setClickListener.safeHook {
-            before {
-                val popup = instance<PopViewList>()
-                val items = exportPopupItems.remove(popup) ?: return@before
-                val original = args(0).cast<PopViewList.PopViewClickListener?>() ?: return@before
-                val exportPosition = items.size - 1
-                args(0).set(object : PopViewList.PopViewClickListener {
-                    override fun setOnClick(position: Int) {
-                        if (position != exportPosition) {
-                            original.setOnClick(position)
-                            return
-                        }
-                        (currentTitleBar?.get()?.context as? Activity)?.let(::showExportDialog)
-                    }
-                })
-            }
-        }
+        menu.addEntry(
+            title = { it.moduleString(R.string.hwhh_export_title) },
+            onSelect = ::showExportDialog,
+        )
     }
 
     private fun showExportDialog(activity: Activity) {

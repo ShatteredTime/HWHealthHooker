@@ -21,6 +21,7 @@
 # our APK, so tell R8 not to complain.
 -dontwarn com.huawei.**
 -dontwarn net.zetetic.**
+-dontwarn com.tencent.mmkv.**
 
 # gson is read off host objects and must resolve to the host's copy via
 # HostClassLoaderBridge, which redirects by class name. jadx (in :analyzer)

@@ -16,6 +16,8 @@
     <string name="hook_sport_history_export_subtitle">批量导出运动</string>
     <string name="hook_health_export_title">健康数据导出</string>
     <string name="hook_health_export_subtitle">将原始健康数据导出为 JSON（长按清空ID解析缓存）</string>
+    <string name="hook_health_insights_title">健康洞察导出</string>
+    <string name="hook_health_insights_subtitle">导出宿主缓存的云端洞察卡片</string>
     <string name="hook_module_cache_title">模块缓存清理</string>
     <string name="hook_module_cache_subtitle">在「设置 &gt; 清理缓存」中加入 HWHealthHooker 一栏</string>
     <string name="debug_settings_title">调试设置</string>

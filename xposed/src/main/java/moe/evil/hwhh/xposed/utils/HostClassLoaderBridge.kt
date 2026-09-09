@@ -11,6 +11,7 @@ object HostClassLoaderBridge {
     private val hostPrefixes = arrayOf(
         "com.huawei.",
         "com.google.gson.",
+        "com.tencent.mmkv.",
         "net.zetetic.",
     )
 

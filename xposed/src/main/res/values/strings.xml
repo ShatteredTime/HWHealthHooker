@@ -35,6 +35,15 @@
     <string name="hwhh_batch_done">%1$d OK, %2$d no-GPS, %3$d failed (total %4$d)\n\n%5$s</string>
     <string name="hwhh_batch_failed_title">Batch export failed</string>
     <string name="hwhh_batch_failed">Batch failed: %1$s</string>
+    <!-- Health insights export -->
+    <string name="hwhh_insights_title">Health Insights Export</string>
+    <string name="hwhh_insights_exporting">Reading health insights…</string>
+    <string name="hwhh_insights_done_title">Insights exported</string>
+    <string name="hwhh_insights_done_message">%1$s\n\nInsights: %2$d cards, %3$d of them with data.\nTrends: %4$d reports over %5$d points.</string>
+    <string name="hwhh_insights_share">Share</string>
+    <string name="hwhh_insights_exported">Insights exported: %1$s</string>
+    <string name="hwhh_insights_failed_title">Insights export failed</string>
+    <string name="hwhh_insights_failed">Insights export failed: %1$s</string>
     <!-- Sharing -->
     <string name="hwhh_share_title">Share export</string>
     <string name="hwhh_share_zipping">Packing archive…</string>

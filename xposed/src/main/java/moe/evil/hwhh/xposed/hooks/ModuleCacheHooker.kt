@@ -33,7 +33,7 @@ import moe.evil.hwhh.xposed.utils.wrapper.safeHook
 import java.io.File
 import kotlin.concurrent.thread
 
-@HookRoot(order = 6)
+@HookRoot(order = 7)
 object ModuleCacheHooker : DexKitBaseHooker() {
     private const val CLEAR_CACHE_ACTIVITY =
         "com.huawei.ui.main.stories.settings.activity.ClearDataCacheActivity"
