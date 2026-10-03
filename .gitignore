@@ -15,3 +15,4 @@ app/release/
 /.kotlin/
 .*.json
 *.log
+/.tmp

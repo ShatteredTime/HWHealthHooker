@@ -22,8 +22,8 @@ android {
     defaultConfig {
         applicationId = "moe.evil.hwhh"
         minSdk = 36
-        versionCode = 12
-        versionName = "1.0.12"
+        versionCode = 13
+        versionName = "1.0.13"
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
         ndk {
             //noinspection ChromeOsAbiSupport

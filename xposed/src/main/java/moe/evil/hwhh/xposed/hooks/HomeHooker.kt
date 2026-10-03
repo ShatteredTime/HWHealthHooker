@@ -39,6 +39,9 @@ object HomeHooker : DexKitBaseHooker() {
         val dailyMomentCardAdapterClazz = bridge.requireClass(
             "com.huawei.health.functionsetcard.dailymoment.DailyMomentCardAdapter",
         )
+        val dailyMomentViewHolderClazz = bridge.requireClass(
+            $$"com.huawei.health.functionsetcard.dailymoment.DailyMomentCardAdapter$DailyMomentViewHolder",
+        )
         val functionSetViewAdapterClazz =
             bridge.requireClass("com.huawei.health.functionsetcard.FunctionSetViewAdapter")
         val recyclerViewHolderClazz =
@@ -114,8 +117,9 @@ object HomeHooker : DexKitBaseHooker() {
             parameters(recyclerViewHolderClazz, classOf<Int>())
         }?.safeHook {
             after {
-                if (args(1).int() == 1) {
-                    collapseDailyMomentCard(args(0).any())
+                val holder = args(0).any()
+                if (dailyMomentViewHolderClazz.isInstance(holder)) {
+                    collapseDailyMomentCard(holder)
                 }
             }
         }
@@ -126,7 +130,8 @@ object HomeHooker : DexKitBaseHooker() {
         val cardId = dailyMomentCardId ?: itemView.resources
             .hostViewId(DAILY_MOMENT_CARD_ID)
             .also { dailyMomentCardId = it }
-        cardId.asResIdOrNull()?.let { itemView.findViewById<View>(it) }?.let(::collapseView)
+        val card = cardId.asResIdOrNull()?.let { itemView.findViewById<View>(it) } ?: return
+        collapseView(card)
         collapseView(itemView)
     }
 
